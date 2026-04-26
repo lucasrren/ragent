@@ -1,0 +1,2908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Ragent 智能体项目多条核心业务链路的可视化流程分析，涵盖智能问答、文档入库、会话记忆、模型路由、反馈、Trace、MCP、认证、Dashboard 与定时刷新。">
+<meta name="keywords" content="Ragent, RAG, 流程分析, 业务链路, 智能问答, 模型路由, 会话记忆">
+<title>Ragent 业务链路流程分析</title>
+<style>
+/* ==================== CSS 变量与全局重置 ==================== */
+:root {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #181825;
+  --bg-tertiary: #313244;
+  --bg-surface: #45475a;
+  --text-primary: #cdd6f4;
+  --text-secondary: #a6adc8;
+  --text-muted: #6c7086;
+  --accent-blue: #89b4fa;
+  --accent-green: #a6e3a1;
+  --accent-orange: #fab387;
+  --accent-purple: #cba6f7;
+  --accent-red: #f38ba8;
+  --accent-gray: #9399b2;
+  --accent-teal: #94e2d5;
+  --border-color: #45475a;
+  --hover-bg: #313244;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --radius: 8px;
+  --sidebar-width: 280px;
+  /* 节点颜色 */
+  --node-user: #89b4fa;
+  --node-data: #a6e3a1;
+  --node-ai: #fab387;
+  --node-storage: #cba6f7;
+  --node-decision: #f38ba8;
+  --node-async: #9399b2;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ==================== 顶部标题栏 ==================== */
+.header {
+  height: 56px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  z-index: 100;
+}
+.header-logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  letter-spacing: 1px;
+}
+.header-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-color);
+}
+.header-title {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.header-badge {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 4px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  color: var(--text-muted);
+}
+
+/* ==================== 主布局 ==================== */
+.main-layout {
+  display: flex;
+  height: calc(100vh - 56px);
+}
+
+/* ==================== 左侧导航菜单 ==================== */
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.sidebar-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  padding: 20px 20px 8px;
+}
+.nav-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+.nav-item:hover {
+  background: var(--hover-bg);
+}
+.nav-item.active {
+  background: rgba(137, 180, 250, 0.08);
+  border-left-color: var(--accent-blue);
+}
+.nav-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.nav-text { flex: 1; }
+.nav-text-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.nav-text-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* 图例 */
+.legend {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+}
+.legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ==================== 右侧内容区域 ==================== */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 链路信息头部 */
+.flow-header {
+  padding: 20px 28px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+.flow-header-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.flow-header-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.flow-header-tags {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.flow-tag {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+/* 流程图画布 */
+.canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+.canvas-container.dragging { cursor: grabbing; }
+
+.canvas-svg {
+  position: absolute;
+  top: 0; left: 0;
+  transform-origin: 0 0;
+}
+
+/* 缩放控制 */
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 50;
+}
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background 0.15s;
+}
+.zoom-btn:hover { background: var(--bg-tertiary); }
+.zoom-info {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+/* ==================== 节点详情面板 ==================== */
+.detail-panel {
+  position: fixed;
+  top: 56px;
+  right: -460px;
+  width: 440px;
+  height: calc(100vh - 56px);
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  z-index: 200;
+  transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.3);
+}
+.detail-panel.open { right: 0; }
+
+.detail-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+.detail-panel-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.detail-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.detail-close-btn:hover { background: var(--bg-surface); }
+
+.detail-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.detail-section {
+  margin-bottom: 20px;
+}
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.detail-section-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  background: var(--bg-primary);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+.detail-type-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e1e2e;
+}
+.detail-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.detail-kv-item {
+  display: flex;
+  gap: 8px;
+}
+.detail-kv-key {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+.detail-kv-val {
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.detail-code {
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--accent-teal);
+  background: rgba(148, 226, 213, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* 遮罩层 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(2px);
+  z-index: 150;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s;
+}
+.overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ==================== SVG 节点样式 ==================== */
+.flow-node {
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+.flow-node:hover {
+  filter: brightness(1.2) drop-shadow(0 0 8px rgba(137,180,250,0.3));
+}
+.flow-node rect, .flow-node polygon {
+  transition: stroke-width 0.15s;
+}
+.flow-node:hover rect, .flow-node:hover polygon {
+  stroke-width: 2.5;
+}
+
+/* ==================== 决策点说明区域 ==================== */
+.decisions-bar {
+  padding: 12px 28px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  max-height: 160px;
+  overflow-y: auto;
+}
+.decisions-bar-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.decisions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.decision-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: rgba(243, 139, 168, 0.1);
+  border: 1px solid rgba(243, 139, 168, 0.25);
+  border-radius: 6px;
+  color: var(--accent-red);
+  line-height: 1.4;
+}
+
+/* ==================== 滚动条 ==================== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ==================== 响应式 ==================== */
+@media (max-width: 900px) {
+  .sidebar { width: 220px; min-width: 220px; }
+  .detail-panel { width: 340px; right: -360px; }
+}
+@media (max-width: 640px) {
+  .sidebar {
+    position: fixed;
+    left: -100%;
+    top: 56px;
+    height: calc(100vh - 56px);
+    z-index: 180;
+    transition: left 0.3s;
+  }
+  .sidebar.mobile-open { left: 0; }
+  .detail-panel { width: 100%; right: -100%; }
+  .mobile-menu-btn { display: flex !important; }
+}
+
+/* ==================== 浅色主题 ==================== */
+body.theme-light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #e5e5ea;
+  --bg-surface: #d1d1d6;
+  --text-primary: #1d1d1f;
+  --text-secondary: #3a3a3c;
+  --text-muted: #8e8e93;
+  --border-color: #d1d1d6;
+  --hover-bg: #e5e5ea;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+body.theme-light .detail-type-badge { color: #fff; }
+
+/* ==================== 顶部工具栏（搜索+操作按钮） ==================== */
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.search-box {
+  position: relative;
+  width: 240px;
+}
+.search-box input {
+  width: 100%;
+  height: 32px;
+  padding: 0 32px 0 32px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.search-box input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(137,180,250,0.15);
+}
+.search-box::before {
+  content: '🔍';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+.search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  z-index: 300;
+  display: none;
+}
+.search-results.open { display: block; }
+.search-result-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.15s;
+}
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: var(--hover-bg); }
+.search-result-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.search-result-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.search-result-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tool-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.15s, transform 0.15s;
+}
+.tool-btn:hover { background: var(--bg-surface); transform: translateY(-1px); }
+.tool-btn:active { transform: translateY(0); }
+
+.mobile-menu-btn { display: none; }
+
+/* ==================== SVG 连线动画 ==================== */
+@keyframes dashFlow {
+  to { stroke-dashoffset: -20; }
+}
+.edge-path-dashed {
+  animation: dashFlow 1.2s linear infinite;
+}
+.edge-path { transition: stroke-width 0.2s, stroke-opacity 0.2s; }
+
+/* ==================== SVG 节点高亮联动 ==================== */
+.flow-node.dimmed { opacity: 0.25; }
+.flow-node.highlighted rect, .flow-node.highlighted polygon {
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 0 10px rgba(137,180,250,0.6));
+}
+.edge-path.dimmed { stroke-opacity: 0.1 !important; }
+.edge-path.highlighted { stroke-opacity: 0.95 !important; stroke-width: 2.5 !important; }
+
+/* ==================== 详情面板增强 ==================== */
+.detail-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+.detail-nav-btn {
+  padding: 5px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.detail-nav-btn:hover:not(:disabled) {
+  background: var(--bg-surface);
+  border-color: var(--accent-blue);
+}
+.detail-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.detail-nav-progress {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* 可复制代码块 */
+.detail-code.copyable {
+  cursor: pointer;
+  position: relative;
+  user-select: all;
+  transition: background 0.15s;
+}
+.detail-code.copyable:hover {
+  background: rgba(148, 226, 213, 0.18);
+}
+.detail-code.copied::after {
+  content: '✓ 已复制';
+  position: absolute;
+  top: -24px;
+  right: 0;
+  background: var(--accent-green);
+  color: #1e1e2e;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* ==================== 快捷键提示 ==================== */
+.shortcut-hint {
+  position: fixed;
+  bottom: 16px;
+  left: 296px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0.7;
+  display: flex;
+  gap: 12px;
+}
+.shortcut-hint kbd {
+  padding: 1px 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  font-family: 'Cascadia Code', monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+@media (max-width: 900px) {
+  .shortcut-hint { display: none; }
+}
+
+/* ==================== 加载淡入动画 ==================== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.canvas-svg { animation: fadeInUp 0.4s ease; }
+
+/* ==================== 链路头部统计 ==================== */
+.flow-header-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.stat-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 3px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  color: var(--text-secondary);
+}
+.stat-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== 顶部标题栏 ==================== -->
+<header class="header">
+  <button class="tool-btn mobile-menu-btn" onclick="toggleMobileSidebar()" title="菜单">☰</button>
+  <div class="header-logo">⚡ Ragent</div>
+  <div class="header-divider"></div>
+  <div class="header-title">业务链路流程分析</div>
+  <div class="header-tools">
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="搜索节点（名称/类名）..." autocomplete="off" />
+      <div class="search-results" id="search-results"></div>
+    </div>
+    <button class="tool-btn" onclick="toggleTheme()" title="切换主题" id="theme-btn">🌙</button>
+    <button class="tool-btn" onclick="toggleFullscreen()" title="全屏 (F11)">⛶</button>
+    <button class="tool-btn" onclick="exportSVG()" title="导出 SVG">⬇</button>
+  </div>
+  <div class="header-badge" id="global-stats-badge">加载中...</div>
+</header>
+
+<!-- ==================== 主布局 ==================== -->
+<div class="main-layout">
+  <!-- 左侧导航 -->
+  <aside class="sidebar">
+    <div class="sidebar-section-title">核心链路</div>
+    <div id="nav-container"></div>
+    <!-- 图例 -->
+    <div class="legend">
+      <div class="legend-title">节点类型图例</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--node-user)"></span>用户交互</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--node-data)"></span>数据处理</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--node-ai)"></span>AI / LLM 调用</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--node-storage)"></span>存储 / 数据库</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--node-decision)"></span>决策 / 分支</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--node-async)"></span>异步处理</div>
+    </div>
+  </aside>
+
+  <!-- 右侧内容 -->
+  <div class="content">
+    <div class="flow-header" id="flow-header"></div>
+    <div class="canvas-container" id="canvas-container">
+      <svg class="canvas-svg" id="canvas-svg"></svg>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomIn()" title="放大">＋</button>
+        <div class="zoom-info" id="zoom-info">100%</div>
+        <button class="zoom-btn" onclick="zoomOut()" title="缩小">－</button>
+        <button class="zoom-btn" onclick="zoomReset()" title="重置" style="font-size:13px;margin-top:4px;">⟲</button>
+      </div>
+    </div>
+    <div class="decisions-bar" id="decisions-bar" style="display:none"></div>
+  </div>
+</div>
+
+<!-- 遮罩 -->
+<div class="overlay" id="overlay" onclick="closeDetailPanel()"></div>
+
+<!-- 节点详情面板 -->
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-panel-header">
+    <h3 id="detail-title">节点详情</h3>
+    <button class="detail-close-btn" onclick="closeDetailPanel()">✕</button>
+  </div>
+  <div class="detail-nav-bar">
+    <button class="detail-nav-btn" id="detail-prev-btn" onclick="navigateNode(-1)">← 上一步</button>
+    <span class="detail-nav-progress" id="detail-progress">1 / 1</span>
+    <button class="detail-nav-btn" id="detail-next-btn" onclick="navigateNode(1)">下一步 →</button>
+  </div>
+  <div class="detail-panel-body" id="detail-body"></div>
+</div>
+
+<!-- 快捷键提示 -->
+<div class="shortcut-hint">
+  <span><kbd>←</kbd><kbd>→</kbd> 切换链路</span>
+  <span><kbd>/</kbd> 搜索</span>
+  <span><kbd>ESC</kbd> 关闭</span>
+  <span>滚轮缩放 · 拖拽平移</span>
+</div>
+
+<script>
+/* ====================================================================================
+ *  Ragent 业务链路流程分析 - 核心数据与渲染逻辑
+ * ==================================================================================== */
+
+// ==================== 节点类型定义 ====================
+const NODE_TYPES = {
+  user:     { label: '用户交互', color: '#89b4fa', bgAlpha: '26' },
+  data:     { label: '数据处理', color: '#a6e3a1', bgAlpha: '26' },
+  ai:       { label: 'AI/LLM',  color: '#fab387', bgAlpha: '26' },
+  storage:  { label: '存储',     color: '#cba6f7', bgAlpha: '26' },
+  decision: { label: '决策',     color: '#f38ba8', bgAlpha: '26' },
+  async:    { label: '异步',     color: '#9399b2', bgAlpha: '26' }
+};
+
+// ==================== 核心链路数据 ====================
+const FLOWS = [
+  // ───────── 链路1：智能问答链路 ─────────
+  {
+    id: 'qa',
+    title: '智能问答链路',
+    subtitle: '核心链路',
+    icon: '💬',
+    iconBg: '#89b4fa',
+    desc: '从用户提问到流式输出的完整 RAG 问答流程，涵盖限流、记忆加载、问题重写、意图识别、歧义引导、SYSTEM直答、KB/MCP 混合上下文构建与模型容错降级。',
+    tags: ['RAG', '流式SSE', '歧义引导', 'KB/MCP混合上下文', '模型降级'],
+    decisions: [
+      '歧义引导：GuidanceDecision.isPrompt() 时直接返回引导提示',
+      'SYSTEM 直答：全部意图均为 SYSTEM 时跳过检索',
+      'KB / MCP 分支：按子问题意图分别构建上下文，可并行补齐',
+      '检索上下文为空：返回“未检索到与问题相关的文档内容。”',
+      '模型调用失败：标记失败→熔断→降级到下一候选'
+    ],
+    nodes: [
+      { id: 'qa-1',  name: '用户提问', type: 'user',
+        javaClass: 'RAGChatController#chat',
+        desc: '用户通过前端聊天界面输入问题，发起 GET /rag/v3/chat SSE 流式请求，携带 question、conversationId、deepThinking 参数。',
+        input: '用户输入文本(question)、会话ID(conversationId)、深度思考开关(deepThinking)',
+        output: 'SseEmitter 流式发射器',
+        config: 'GET /api/ragent/rag/v3/chat (produces text/event-stream)',
+        error: '参数校验失败返回400，幂等校验拦截重复请求' },
+      { id: 'qa-2',  name: '限流排队', type: 'data',
+        javaClass: 'ChatRateLimitAspect + ChatQueueLimiter#enqueue',
+        desc: '通过 @ChatRateLimit 注解触发 AOP 切面，ChatQueueLimiter 基于 Redis ZSET 排队队列 + Redisson RPermitExpirableSemaphore 可过期分布式信号量控制全局并发数，保护后端服务不被流量击穿。',
+        input: '用户请求（question、conversationId、SseEmitter）',
+        output: '获得执行许可或排队等待位置',
+        config: 'rag.rate-limit.global-max-concurrent, global-max-wait-seconds, global-poll-interval-ms',
+        error: '排队超时推送 reject 事件："系统繁忙，请稍后再试"' },
+      { id: 'qa-3',  name: '记忆加载', type: 'data',
+        javaClass: 'ConversationMemoryService',
+        desc: '并行加载会话摘要和近N轮历史消息（CompletableFuture.allOf），构建完整的上下文记忆。',
+        input: '会话ID',
+        output: 'ConversationMemory（摘要+历史消息列表）',
+        config: 'history-keep-turns=4, summary-max-chars=200',
+        error: '加载超时使用空记忆降级' },
+      { id: 'qa-4',  name: '问题重写与拆分', type: 'ai',
+        javaClass: 'QueryRewriteService',
+        desc: '对用户原始问题进行：①关键词归一化（查询词映射表）②LLM改写（结合历史消息补全指代）③多问句拆分为独立子问题。',
+        input: '原始问题 + 历史记忆',
+        output: '重写后的子问题列表',
+        config: 'rag.query-rewrite.enabled（开关）',
+        error: '重写失败回退原始问题' },
+      { id: 'qa-5',  name: '意图解析', type: 'ai',
+        javaClass: 'IntentResolver#resolve + DefaultIntentClassifier',
+        desc: '通过 intentClassifyThreadPoolExecutor 对每个子问题并行调用 IntentClassifier（LLM），解析意图与置信度。过滤低分意图（<0.35），限制总意图数（≤3）。',
+        input: 'RewriteResult（子问题列表）+ 意图树',
+        output: 'List<SubQuestionIntent>（含 NodeScore 列表）',
+        config: 'INTENT_MIN_SCORE=0.35, MAX_INTENT_COUNT=3',
+        error: '解析失败则意图为空，走全局检索' },
+      { id: 'qa-6',  name: '歧义引导', type: 'decision',
+        javaClass: 'IntentGuidanceService#detectAmbiguity',
+        desc: '检测意图置信度不足时（如多个低分意图竞争），基于 GuidanceProperties 配置判断是否返回引导性提示，让用户明确意图，而非直接检索。',
+        input: 'question + List<SubQuestionIntent>',
+        output: 'GuidanceDecision（NONE / PROMPT）',
+        config: 'rag.guidance.enabled=true, ambiguityScoreRatio=0.8, maxOptions=6',
+        error: '未开启或无歧义时返回 GuidanceDecision.none()' },
+      { id: 'qa-6a', name: '返回引导提示', type: 'user',
+        javaClass: 'RAGChatServiceImpl#streamChat',
+        desc: '当 GuidanceDecision.isPrompt() 为 true 时，直接通过 StreamCallback 输出引导文案并 onComplete，主链路提前结束，不再继续检索或模型生成。',
+        input: 'GuidanceDecision.prompt',
+        output: 'SSE 引导提示文本',
+        config: '命中歧义引导分支',
+        error: '回调异常由事件处理器统一处理' },
+      { id: 'qa-7',  name: '分支判断', type: 'decision',
+        javaClass: 'RAGChatServiceImpl#streamChat',
+        desc: '全部 SYSTEM 意图时直接走 SYSTEM 直答；否则按子问题继续构建 KB / MCP 上下文。',
+        input: '意图列表',
+        output: '路由方向（SYSTEM / RETRIEVAL）',
+        config: '基于 intentResolver.isSystemOnly(...) 判断',
+        error: '无' },
+      { id: 'qa-8',  name: 'KB 检索与重排', type: 'data',
+        javaClass: 'RetrievalEngine#buildSubQuestionContext → MultiChannelRetrievalEngine#retrieveKnowledgeChannels',
+        desc: '对 KB 意图执行多通道检索，先并行跑定向检索与全局检索，再在引擎内完成去重、重排与分组上下文构建。',
+        input: 'KB 子问题意图 + topK',
+        output: 'KB chunks / intentChunks / kbContext',
+        config: 'rag.search.channels.vector-global.confidence-threshold=0.6, intent-directed.min-intent-score=0.4',
+        error: '单通道或单个后处理器异常降级处理，不阻断其它分支' },
+      { id: 'qa-9',  name: 'MCP 工具执行', type: 'data',
+        javaClass: 'RetrievalEngine#buildSubQuestionContext → executeMcpAndMerge',
+        desc: '对 MCP 意图提取工具参数并调用对应执行器，将工具结果整理为 mcpContext，供后续消息组装使用。',
+        input: 'MCP 子问题意图 + subQuestion',
+        output: 'mcpContext',
+        config: '按 MCP 意图动态选择执行器',
+        error: '单个工具执行异常仅降级当前 MCP 分支' },
+      { id: 'qa-10', name: '上下文合并', type: 'data',
+        javaClass: 'RetrievalEngine#retrieve',
+        desc: '并行汇总各子问题的 kbContext、mcpContext 与 intentChunks，最终构造 RetrievalContext。',
+        input: '各子问题上下文',
+        output: 'RetrievalContext（kbContext + mcpContext + intentChunks）',
+        config: 'ragContextExecutor 并行汇总',
+        error: '子任务 join 后返回空上下文时进入结果判空分支' },
+      { id: 'qa-11', name: '结果判空', type: 'decision',
+        javaClass: 'RAGChatServiceImpl#streamChat',
+        desc: '若 RetrievalContext 为空，则直接返回固定回复；否则继续进入消息组装。',
+        input: 'RetrievalContext',
+        output: '路由方向（EMPTY / CONTINUE）',
+        config: 'ctx.isEmpty()',
+        error: '无' },
+      { id: 'qa-12', name: '返回无文档回复', type: 'user',
+        javaClass: 'RAGChatServiceImpl#streamChat',
+        desc: '调用 callback.onContent("未检索到与问题相关的文档内容。") 并 onComplete，主链路提前结束。',
+        input: '空 RetrievalContext',
+        output: 'SSE 固定回复',
+        config: '固定回复：未检索到与问题相关的文档内容。',
+        error: '回调异常由事件处理器统一处理' },
+      { id: 'qa-13', name: '消息组装', type: 'ai',
+        javaClass: 'RAGPromptService + RAGChatServiceImpl#streamSystemResponse/#streamLLMResponse',
+        desc: 'RAG 分支按 PromptContext 选择模板并组装结构化消息；SYSTEM 分支则直接加载系统提示词与历史消息，二者最终都生成 ChatRequest。',
+        input: 'RetrievalContext / customPrompt + history',
+        output: 'ChatRequest',
+        config: 'answer-chat-kb.st / answer-chat-mcp.st / answer-chat-mcp-kb-mixed.st + system prompt',
+        error: '模板缺失时回退默认模板或系统提示词' },
+      { id: 'qa-14', name: '流式输出', type: 'ai',
+        javaClass: 'RoutingLLMService + ModelRoutingExecutor + ProbeStreamBridge',
+        desc: 'ModelSelector 按优先级选择候选模型，ProbeStreamBridge 做首包探测；SYSTEM 与 RAG 两条分支最终都通过 SSE 向前端流式输出。',
+        input: 'ChatRequest + 模型候选',
+        output: 'SSE流式文本块',
+        config: 'model-priority, failure-threshold=2, cooldown=30s',
+        error: '所有模型失败→抛异常 "All models failed"' },
+      { id: 'qa-15', name: '异步后处理', type: 'async',
+        javaClass: 'StreamChatEventHandler + ConversationMemorySummaryService',
+        desc: '对话完成或提前结束后，事件处理器负责保存 User/Assistant 消息，并按需触发会话摘要压缩；失败仅记录日志，不影响已经返回给用户的结果。',
+        input: '完整对话内容 / 提前结束回复',
+        output: '消息持久化 + 记忆压缩结果',
+        config: 'summary-start-turns=5',
+        error: '异步失败记录日志，不影响用户' }
+    ]
+  },
+
+  // ───────── 链路2：文档入库（Chunk模式）─────────
+  {
+    id: 'chunk',
+    title: '文档入库链路（Chunk模式）',
+    subtitle: '数据管道',
+    icon: '📄',
+    iconBg: '#a6e3a1',
+    desc: '基于消息队列的异步文档处理管道，文件上传后经解析、分块、向量化写入多种存储。',
+    tags: ['RocketMQ', 'Apache Tika', 'Embedding', 'Milvus', 'PostgreSQL'],
+    decisions: [],
+    nodes: [
+      { id: 'ck-1', name: '文档上传', type: 'user',
+        javaClass: 'KnowledgeDocumentController#upload',
+        desc: '用户通过管理后台上传文档文件（PDF/Word/Markdown等）。',
+        input: '文件二进制流 + 知识库ID',
+        output: '文件元信息记录',
+        config: '支持格式：pdf, docx, md, txt, html',
+        error: '文件大小超限返回413' },
+      { id: 'ck-2', name: '文件存储', type: 'storage',
+        javaClass: 'S3FileStorageService (implements FileStorageService)',
+        desc: '使用 AWS S3 SDK 通过 S3Presigner 预签名 URL + HttpURLConnection 流式上传到兼容 S3 的对象存储（RustFS/MinIO/AWS S3）。堆内存近似为零，适合大文件场景；另有 reliableUpload 方法走 SDK putObject 带自动重试。',
+        input: 'bucketName + MultipartFile / InputStream + size',
+        output: 'StoredFileDTO { url, originalFilename, detectedType, size }',
+        config: 's3.endpoint, s3.bucket, s3.access-key, CONNECT_TIMEOUT_MS=10000, READ_TIMEOUT_MS=60000, PRESIGN_DURATION=10min',
+        error: '上传失败抛 SneakyThrows IOException；文档状态保持 PENDING 由用户手动重试' },
+      { id: 'ck-3', name: '发送MQ消息', type: 'async',
+        javaClass: 'MessageQueueProducer (RocketMQ)',
+        desc: '发送 RocketMQ 事务消息，确保文档记录写入数据库和消息发送的原子性。',
+        input: '文档ID + 存储路径',
+        output: 'MQ消息（topic: document-chunk）',
+        config: 'rocketmq.topic, rocketmq.group',
+        error: '事务消息回查机制保证最终一致性' },
+      { id: 'ck-4', name: '消费者处理', type: 'data',
+        javaClass: 'KnowledgeDocumentChunkConsumer',
+        desc: 'RocketMQ 消费者接收消息，触发完整的文档解析入库流水线。',
+        input: 'MQ消息',
+        output: '触发解析流程',
+        config: 'consumer-group, consume-thread-max',
+        error: '消费失败重试（最多3次）' },
+      { id: 'ck-5', name: '文档解析', type: 'data',
+        javaClass: 'DocumentParserSelector + DocumentParser (Tika/Markdown)',
+        desc: '使用 Apache Tika 解析PDF/Word等富文本，Markdown Parser处理MD文件，提取纯文本内容。',
+        input: '文件二进制流',
+        output: '纯文本内容',
+        config: 'parser类型自动检测',
+        error: '解析失败标记文档状态为ERROR' },
+      { id: 'ck-6', name: '文本分块', type: 'data',
+        javaClass: 'ChunkingStrategy',
+        desc: '按配置的分块策略切分长文本：固定大小 / 文本边界 / 递归字符 / 语义分块。',
+        input: '纯文本',
+        output: 'List<TextChunk>',
+        config: 'chunk-size=512, chunk-overlap=64, strategy=recursive',
+        error: '空文本跳过分块' },
+      { id: 'ck-7', name: '向量化', type: 'ai',
+        javaClass: 'ChunkEmbeddingService + RoutingEmbeddingService',
+        desc: '调用 Embedding 模型（如 text-embedding-3-small）将每个文本块转换为向量。',
+        input: 'List<TextChunk>',
+        output: 'List<ChunkWithVector>',
+        config: 'embedding-model, embedding-dimension',
+        error: '批量调用失败分片重试' },
+      { id: 'ck-8', name: '写入存储', type: 'storage',
+        javaClass: 'VectorStoreService + KnowledgeChunkMapper',
+        desc: '将向量写入向量数据库（Milvus/pgvector），元数据写入 PostgreSQL 关系数据库。',
+        input: 'List<ChunkWithVector>',
+        output: '持久化完成',
+        config: 'milvus.collection, pg.table',
+        error: '写入失败标记文档状态为ERROR' }
+    ]
+  },
+
+  // ───────── 链路3：文档入库（Pipeline模式）─────────
+  {
+    id: 'pipeline',
+    title: '文档入库链路（Pipeline模式）',
+    subtitle: '高级管道',
+    icon: '🔗',
+    iconBg: '#fab387',
+    desc: '可视化编排的文档处理流水线，支持节点条件执行、链式传递和独立日志，每个节点可灵活配置。',
+    tags: ['Pipeline', '节点编排', 'AI增强', '条件执行', '链式传递'],
+    decisions: [
+      '每个节点支持条件执行（condition_json）',
+      '链式传递（next_node_id）',
+      '独立日志记录'
+    ],
+    nodes: [
+      { id: 'pp-1', name: '文档上传', type: 'user',
+        javaClass: 'IngestionTaskController#upload',
+        desc: '用户上传文档并指定 Pipeline ID，触发对应的流水线执行。',
+        input: '文件 + Pipeline ID',
+        output: '创建 IngestionTask',
+        config: 'pipeline_id 必填',
+        error: 'Pipeline不存在返回404' },
+      { id: 'pp-2', name: 'IngestionEngine', type: 'data',
+        javaClass: 'IngestionEngine#execute → executeChain',
+        desc: '流水线执行引擎，自动寻找起始节点（没有被任何节点引用的节点），通过 nextNodeId 链式顺序执行，支持循环检测。',
+        input: 'PipelineDefinition + IngestionContext',
+        output: '逐节点执行结果 + NodeLog 列表',
+        config: 't_ingestion_pipeline_node 配置表，next_node_id 字段',
+        error: '循环依赖抛 ClientException；节点异常中断流水线并记录日志' },
+      { id: 'pp-3', name: 'FetcherNode', type: 'data',
+        javaClass: 'FetcherNode',
+        desc: '获取文档内容，支持从本地文件读取或从URL远程抓取。',
+        input: '文件路径 / URL',
+        output: '原始文档二进制',
+        config: 'source_type: local/url, timeout',
+        error: '远程抓取超时/404' },
+      { id: 'pp-4', name: 'ParserNode', type: 'data',
+        javaClass: 'ParserNode',
+        desc: '解析文档内容，使用 Tika 处理PDF/Word，Markdown Parser处理MD文件。',
+        input: '原始文档二进制',
+        output: '纯文本内容',
+        config: 'parser_type: auto/tika/markdown',
+        error: '不支持的格式抛异常' },
+      { id: 'pp-5', name: 'EnhancerNode', type: 'ai',
+        javaClass: 'EnhancerNode',
+        desc: 'AI增强节点，调用LLM对解析出的文本进行质量增强，如纠错、补全、结构化。',
+        input: '纯文本',
+        output: '增强后文本',
+        config: 'enhance_prompt, llm_model',
+        error: '增强失败使用原始文本' },
+      { id: 'pp-6', name: 'ChunkerNode', type: 'data',
+        javaClass: 'ChunkerNode',
+        desc: '文本分块节点，按配置的分块策略（FIXED_SIZE / TEXT_BOUNDARY / RECURSIVE_CHARACTER / SEMANTIC）将长文本切分为检索单元。',
+        input: '增强后的文本',
+        output: 'List<VectorChunk>',
+        config: 'chunkSize, overlapSize, strategy, separator',
+        error: '空文本跳过' },
+      { id: 'pp-7', name: 'EnricherNode', type: 'ai',
+        javaClass: 'EnricherNode',
+        desc: '分块增强节点，对每个分块调用 LLM 进行丰富处理：提取关键词、生成假设性问题（HyDE）、上下文摘要，用于提升检索效果。',
+        input: 'List<VectorChunk>',
+        output: '带元数据的 List<VectorChunk>',
+        config: 'modelId, tasks[{type, systemPrompt, userPromptTemplate}]',
+        error: '单块增强失败使用原始内容继续' },
+      { id: 'pp-8', name: 'IndexerNode', type: 'storage',
+        javaClass: 'IndexerNode',
+        desc: '向量化写入节点，调用Embedding模型转换为向量，写入向量数据库和关系数据库。',
+        input: 'List<TextChunk>',
+        output: '索引完成',
+        config: 'embedding_model, vector_store',
+        error: '写入失败记录到节点日志' }
+    ]
+  },
+
+  // ───────── 链路4：会话记忆管理链路 ─────────
+  {
+    id: 'memory',
+    title: '会话记忆管理链路',
+    subtitle: '上下文管理',
+    icon: '🧠',
+    iconBg: '#cba6f7',
+    desc: '管理对话上下文的滑动窗口记忆 + LLM摘要压缩机制，实现高效的长对话记忆管理。',
+    tags: ['滑动窗口', 'LLM摘要', '分布式锁', '异步压缩', 'CompletableFuture'],
+    decisions: [
+      '消息轮次 ≥ summary-start-turns（默认5）时触发摘要',
+      '使用Redisson分布式锁避免并发摘要',
+      '摘要TTL过期自动清理'
+    ],
+    nodes: [
+      { id: 'mm-1',  name: '用户发送消息', type: 'user',
+        javaClass: 'RAGChatController#chat',
+        desc: '用户发送新一轮对话消息。',
+        input: '消息文本 + 会话ID',
+        output: 'ChatRequest',
+        config: '',
+        error: '' },
+      { id: 'mm-2',  name: '加载会话记忆', type: 'data',
+        javaClass: 'DefaultConversationMemoryService#loadAndAppend',
+        desc: '会话记忆服务入口，通过 CompletableFuture.allOf 并行调度摘要加载和历史消息加载任务。',
+        input: '会话ID',
+        output: 'ConversationMemory（summary + recentMessages）',
+        config: 'memory.history-keep-turns=4, summary-max-chars=200',
+        error: '加载失败返回空记忆降级' },
+      { id: 'mm-3a', name: '加载历史摘要', type: 'data',
+        javaClass: 'ConversationMemorySummaryService#loadLatestSummary',
+        desc: '并行任务A：从数据库加载该会话的历史摘要（ConversationSummary）。',
+        input: '会话ID',
+        output: '摘要文本（可能为空）',
+        config: 'summary-max-chars=200',
+        error: '不存在则返回null' },
+      { id: 'mm-3b', name: '加载近N轮消息', type: 'data',
+        javaClass: 'ConversationMemoryStore#loadHistory',
+        desc: '并行任务B：滑动窗口加载最近N轮（默认4轮）的User+Assistant消息。',
+        input: '会话ID',
+        output: 'List<ChatMessage>（最近4轮）',
+        config: 'history-keep-turns=4',
+        error: '无消息返回空列表' },
+      { id: 'mm-4',  name: '合并记忆', type: 'data',
+        javaClass: 'DefaultConversationMemoryService#attachSummary',
+        desc: '将摘要和近期消息合并为完整的上下文记忆对象。',
+        input: '摘要 + 消息列表',
+        output: 'ConversationMemory',
+        config: '',
+        error: '' },
+      { id: 'mm-5',  name: '返回完整上下文', type: 'data',
+        javaClass: '',
+        desc: '将合并后的记忆注入到RAG流程的Prompt上下文中。',
+        input: 'ConversationMemory',
+        output: '上下文就绪',
+        config: '',
+        error: '' },
+      { id: 'mm-6',  name: 'RAG流程处理', type: 'ai',
+        javaClass: 'RAGChatServiceImpl#streamChat',
+        desc: '执行完整的RAG检索增强生成流程（详见链路1）。',
+        input: '问题 + 上下文 + 知识库',
+        output: 'LLM流式回复',
+        config: '参见智能问答链路',
+        error: '' },
+      { id: 'mm-7',  name: '生成Assistant回复', type: 'ai',
+        javaClass: 'RoutingLLMService',
+        desc: 'LLM生成回复并通过SSE推送。',
+        input: 'Prompt',
+        output: '流式文本',
+        config: '',
+        error: '' },
+      { id: 'mm-8',  name: '保存消息到数据库', type: 'storage',
+        javaClass: 'ConversationMessageService#save',
+        desc: '将本轮的User消息和Assistant回复持久化到数据库。',
+        input: 'User消息 + Assistant消息',
+        output: '保存成功',
+        config: '',
+        error: '保存失败记录日志' },
+      { id: 'mm-9',  name: '判断是否触发摘要', type: 'decision',
+        javaClass: 'JdbcConversationMemorySummaryService#compressIfNeeded',
+        desc: '检查当前消息轮次是否 ≥ 摘要触发阈值（默认5轮），决定是否生成摘要。',
+        input: '消息轮次计数',
+        output: '布尔值',
+        config: 'summary-start-turns=5',
+        error: '' },
+      { id: 'mm-10', name: '异步触发摘要压缩', type: 'async',
+        javaClass: 'JdbcConversationMemorySummaryService#doCompressIfNeeded',
+        desc: '获取Redisson分布式锁 → 加载全部消息 → LLM生成摘要 → 保存/更新摘要记录。TTL=60分钟。',
+        input: '会话ID + 全部消息',
+        output: '摘要记录（ConversationSummary）',
+        config: 'ttl-minutes=60, lock-key=summary:{conversationId}',
+        error: '获锁失败跳过本次摘要' }
+    ]
+  },
+
+  // ───────── 链路5：模型路由与容错链路 ─────────
+  {
+    id: 'routing',
+    title: '模型路由与容错链路',
+    subtitle: '容错机制',
+    icon: '🛡️',
+    iconBg: '#f38ba8',
+    desc: '多模型候选自动路由、三态熔断器健康管理、首包探测与自动降级机制，确保LLM调用的高可用性。',
+    tags: ['三态熔断器', '自动降级', '首包探测', '健康检查', '优先级路由'],
+    decisions: [
+      '健康状态为OPEN→跳过该模型',
+      '健康状态为HALF_OPEN→放行一个探测请求',
+      '失败次数 ≥ failure-threshold（默认2）→触发熔断',
+      '冷却30s后 OPEN → HALF_OPEN',
+      '所有候选耗尽→抛异常"All models failed"'
+    ],
+    nodes: [
+      { id: 'rt-1', name: '发起模型调用', type: 'user',
+        javaClass: 'RoutingLLMService#streamChat / #chat',
+        desc: 'RAG流程完成Prompt组装后，发起模型调用请求。',
+        input: 'Prompt消息列表',
+        output: '流式响应',
+        config: '',
+        error: '' },
+      { id: 'rt-2', name: 'ModelSelector选择候选', type: 'data',
+        javaClass: 'ModelSelector#selectChatCandidates',
+        desc: '根据配置加载所有可用模型，按 priority 字段升序排列生成候选列表。',
+        input: '模型配置列表',
+        output: 'List<ModelCandidate>（已排序）',
+        config: 'models[].priority',
+        error: '无可用模型抛异常' },
+      { id: 'rt-3', name: '遍历候选模型', type: 'decision',
+        javaClass: 'ModelRoutingExecutor#executeWithFallback',
+        desc: '从候选列表中取出下一个模型，进行健康检查和调用尝试。',
+        input: '候选模型列表',
+        output: '当前候选模型',
+        config: '',
+        error: '列表为空则所有候选耗尽' },
+      { id: 'rt-4', name: '健康检查（三态熔断器）', type: 'decision',
+        javaClass: 'ModelHealthStore#allowCall',
+        desc: '检查当前模型的熔断器状态：CLOSED（正常放行）、OPEN（拒绝，冷却中）、HALF_OPEN（放行一个探测请求）。',
+        input: '模型ID',
+        output: '熔断器状态',
+        config: 'failure-threshold=2, cooldown-seconds=30',
+        error: '' },
+      { id: 'rt-4a', name: 'OPEN：跳过', type: 'decision',
+        javaClass: 'ModelHealthStore',
+        desc: '模型处于熔断OPEN状态，直接跳过该候选，尝试下一个。',
+        input: '状态=OPEN',
+        output: '跳到下一候选',
+        config: 'cooldown剩余时间',
+        error: '' },
+      { id: 'rt-4b', name: 'HALF_OPEN：探测', type: 'decision',
+        javaClass: 'ModelHealthStore',
+        desc: '冷却期结束，模型进入HALF_OPEN状态，放行一个探测请求以验证模型是否恢复。',
+        input: '状态=HALF_OPEN',
+        output: '允许调用（探测）',
+        config: '',
+        error: '' },
+      { id: 'rt-4c', name: 'CLOSED：正常执行', type: 'data',
+        javaClass: 'ModelHealthStore',
+        desc: '模型健康状态正常（CLOSED），放行该请求进行实际调用。',
+        input: '状态=CLOSED',
+        output: '允许调用',
+        config: '',
+        error: '' },
+      { id: 'rt-5', name: '执行模型调用', type: 'ai',
+        javaClass: 'ChatClient#streamChat + ProbeStreamBridge#awaitFirstPacket',
+        desc: '实际调用模型API进行流式推理。ProbeStreamBridge 包装 downstream callback，首包未到达前缓冲消息；超时(10s)或无内容则视为失败并切换下一候选。',
+        input: 'ChatRequest + ModelTarget',
+        output: 'StreamCancellationHandle + 流式响应',
+        config: 'FIRST_PACKET_TIMEOUT_SECONDS=60, timeout, max-tokens',
+        error: 'ERROR/TIMEOUT/NO_CONTENT 任一失败即降级' },
+      { id: 'rt-6a', name: '调用成功', type: 'data',
+        javaClass: 'ModelHealthStore#markSuccess',
+        desc: '标记成功，重置失败计数器，确保熔断器保持CLOSED状态，返回流式结果。',
+        input: '模型ID',
+        output: '失败计数=0，状态=CLOSED',
+        config: '',
+        error: '' },
+      { id: 'rt-6b', name: '调用失败', type: 'decision',
+        javaClass: 'ModelHealthStore#markFailure',
+        desc: '标记失败，失败计数+1，检查是否达到熔断阈值。',
+        input: '模型ID',
+        output: '更新后的失败计数',
+        config: 'failure-threshold=2',
+        error: '' },
+      { id: 'rt-7', name: '判断是否熔断', type: 'decision',
+        javaClass: 'ModelHealthStore#markFailure (内嵌熔断判断)',
+        desc: '失败计数在 markFailure 中原子累加，达到 failure-threshold 后自动将状态从 CLOSED 转换为 OPEN，并记录冷却开始时间戳；冷却结束后下一次 allowCall 时自动进入 HALF_OPEN。',
+        input: '模型ID + 失败计数',
+        output: '熔断状态转换（CLOSED→OPEN）',
+        config: 'failure-threshold=2, open-duration-ms=30000',
+        error: '' },
+      { id: 'rt-8', name: '所有候选耗尽', type: 'decision',
+        javaClass: 'RoutingLLMService',
+        desc: '所有候选模型都已尝试或被熔断跳过，无法完成调用，抛出异常返回错误。',
+        input: '空候选列表',
+        output: '异常："All models failed"',
+        config: '',
+        error: '最终异常，由上层处理返回用户错误信息' }
+    ]
+  },
+  /* ========== 链路 6：用户反馈点赞/点踩 ========== */
+  {
+    id: 'feedback',
+    title: '用户反馈链路（点赞/点踩）',
+    subtitle: '异步持久化',
+    icon: '👍',
+    iconBg: '#f38ba8',
+    desc: '用户对助手消息进行点赞/点踩后，前端立即乐观更新 UI，后端通过 MQ 异步持久化反馈，失败时 UI 回滚。',
+    tags: ['MQ异步', '乐观更新', '幂等消费', 'Upsert'],
+    decisions: [
+      { condition: 'vote == null', branch: '取消反馈', action: '前端本地清除 feedback 字段，不发 MQ' },
+      { condition: 'vote == 1 | -1', branch: '点赞 / 点踩', action: '发送 MessageFeedbackEvent 到 message-feedback_topic' },
+      { condition: 'MQ 发送失败 / 后端 4xx', branch: '反馈失败', action: '前端 toast 提示并回滚消息的 feedback 字段' }
+    ],
+    nodes: [
+      { id: 'fb-1', name: '点击反馈按钮', type: 'user',
+        javaClass: 'FeedbackButtons.tsx',
+        desc: '用户在助手消息气泡上点击 👍 / 👎，或复制消息内容。',
+        input: 'messageId + 目标 FeedbackValue（like / dislike / null）',
+        output: '触发 chatStore.submitFeedback',
+        config: '',
+        error: '按钮状态锁定防止重复点击' },
+      { id: 'fb-2', name: '乐观 UI 更新', type: 'data',
+        javaClass: 'chatStore#submitFeedback',
+        desc: '前端立即更新消息的 feedback 字段，给用户即时反馈；保留原值用于失败回滚。',
+        input: 'FeedbackValue',
+        output: 'messages[i].feedback 已更新',
+        config: '',
+        error: '' },
+      { id: 'fb-3', name: '调用后端接口', type: 'data',
+        javaClass: 'chatService#submitFeedback',
+        desc: '通过 POST /conversations/messages/{messageId}/feedback 上报，vote: 1=赞, -1=踩。',
+        input: 'messageId + vote',
+        output: 'HTTP 请求',
+        config: '',
+        error: '网络异常抛出，前端回滚 UI' },
+      { id: 'fb-4', name: '参数校验', type: 'decision',
+        javaClass: 'MessageFeedbackServiceImpl#submitFeedbackAsync',
+        desc: '校验登录态、messageId 非空、vote 必须为 ±1；校验失败抛 ClientException。',
+        input: 'messageId + vote + 登录态',
+        output: '通过校验的 MessageFeedbackEvent',
+        config: 'vote ∈ {1, -1}',
+        error: 'ClientException → HTTP 400' },
+      { id: 'fb-5', name: '发送 MQ 事件', type: 'async',
+        javaClass: 'MessageQueueProducer#send (RocketMQ)',
+        desc: '构建 MessageFeedbackEvent 并发送到 message-feedback_topic，使用 userId:messageId 作为 key。',
+        input: 'MessageFeedbackEvent',
+        output: 'SendResult',
+        config: 'topic: message-feedback_topic${unique-name}',
+        error: '发送失败事务回滚，HTTP 返回 5xx' },
+      { id: 'fb-6', name: '接口立即返回', type: 'data',
+        javaClass: 'MessageFeedbackController#submitFeedback',
+        desc: 'Controller 不等待持久化结果，直接返回成功；持久化由消费者异步完成。',
+        input: '',
+        output: 'Result.success()',
+        config: '',
+        error: '' },
+      { id: 'fb-7', name: '消费者接收', type: 'async',
+        javaClass: 'MessageFeedbackConsumer#onMessage',
+        desc: '@RocketMQMessageListener 监听 message-feedback_cg 消费组，从队列拉取事件交由业务处理。',
+        input: 'MessageWrapper<MessageFeedbackEvent>',
+        output: '触发 submitFeedbackByEvent',
+        config: 'consumerGroup: message-feedback_cg',
+        error: '异常抛出由 RocketMQ 自动重试（最多 16 次），当前未配置显式幂等切面，幂等性依赖 doUpsertFeedback 内基于 submitTime 的比较逻辑' },
+      { id: 'fb-8', name: '查询原消息', type: 'data',
+        javaClass: 'MessageFeedbackServiceImpl#loadAssistantMessage',
+        desc: '根据 messageId 查询 ConversationMessage，确保属于当前用户且角色为 assistant，用于获取 conversationId。',
+        input: 'messageId + userId',
+        output: 'ConversationMessageDO',
+        config: '',
+        error: '消息不存在/越权抛 ClientException，消费者记日志跳过' },
+      { id: 'fb-9', name: 'Upsert 到数据库', type: 'storage',
+        javaClass: 'MessageFeedbackServiceImpl#doUpsertFeedback',
+        desc: '基于 submitTime 比较，若已有记录则更新（保证最终一致），否则插入 t_message_feedback 表。',
+        input: 'messageId + vote + reason + comment + submitTime',
+        output: 'MessageFeedbackDO 落库',
+        config: '表：t_message_feedback (逻辑删除)',
+        error: 'DB 异常抛出触发 MQ 重试' }
+    ]
+  },
+  /* ========== 链路 7：RAG Trace 链路追踪查询 ========== */
+  {
+    id: 'trace',
+    title: 'RAG Trace 链路追踪',
+    subtitle: '可观测性',
+    icon: '🔬',
+    iconBg: '#94e2d5',
+    desc: 'RAG 调用通过限流切面或显式 Trace Root 创建运行记录，关键方法再由 @RagTraceNode 记录开始/结束事件；运行记录与节点记录同步落库，供后台列表和瀑布图详情查询。',
+    tags: ['Trace', 'TTL透传', '同步写库', '方法级追踪', '瀑布图'],
+    decisions: [
+      '主问答入口：trace 开关开启时优先由 ChatRateLimitAspect#invokeWithTrace 创建 root',
+      '补充入口：仅在显式使用 @RagTraceRoot 且当前线程无 traceId 时，RagTraceAspect#aroundRoot 才会创建根记录',
+      '无 traceId：@RagTraceNode 直接透传，不写节点记录',
+      '业务异常：finishNode(ERROR) → finishRun(ERROR) → emitter.completeWithError(...)',
+      '正常流式分支：finishRun(SUCCESS) 发生在 chat 方法返回，不等于 SSE 全量发送完成'
+    ],
+    nodes: [
+      { id: 'tr-1', name: '创建 Run 记录', type: 'async',
+        javaClass: 'ChatRateLimitAspect#invokeWithTrace',
+        desc: '主问答请求命中限流切面后，若 trace 开关开启，则生成 traceId / taskId，并通过 startRun 立即写入运行记录。',
+        input: 'question + conversationId + userId',
+        output: 'traceId + taskId + RagTraceRunDO（RUNNING）',
+        config: 'rag.trace.enabled=true',
+        error: 'startRun 异常会沿调用链抛出，当前实现未做独立隔离',
+        detail: {
+          eventSequence: [
+            { title: '生成链路标识', method: 'ChatRateLimitAspect#invokeWithTrace', note: '通过 Snowflake 生成 traceId 与 taskId。' },
+            { title: '准备运行元数据', method: 'RagTraceRunDO.builder', note: '记录 entryMethod、conversationId、userId 与 questionLength。' },
+            { title: '写入运行记录', method: 'RagTraceRecordServiceImpl#startRun', write: 't_rag_trace_run INSERT，status=RUNNING' }
+          ],
+          coveredMethods: [
+            'ChatRateLimitAspect#invokeWithTrace',
+            'RagTraceRecordServiceImpl#startRun'
+          ],
+          implementationNotes: [
+            { key: '真实入口', value: '主问答链路优先在 ChatRateLimitAspect 内创建 root。' },
+            { key: '补充入口', value: '其它显式使用 @RagTraceRoot 且当前线程无 traceId 的入口，才会由 RagTraceAspect#aroundRoot 创建根记录。' }
+          ]
+        } },
+      { id: 'tr-2', name: 'Trace 上下文透传', type: 'data',
+        javaClass: 'RagTraceContext',
+        desc: '将 traceId / taskId 写入 TransmittableThreadLocal，并通过 nodeStack 维护父子节点关系；请求结束后在 finally 中统一清理。',
+        input: 'traceId + taskId',
+        output: 'TRACE_ID / TASK_ID / NODE_STACK',
+        config: 'TransmittableThreadLocal',
+        error: '若上下文未被清理，可能污染后续线程内请求',
+        detail: {
+          eventSequence: [
+            { title: '写入 traceId', method: 'RagTraceContext#setTraceId', note: '后续普通节点埋点通过当前 traceId 归属到同一条链路。' },
+            { title: '写入 taskId', method: 'RagTraceContext#setTaskId', note: '问答主流程与 Trace 运行记录共享同一 taskId。' },
+            { title: '维护节点栈', method: 'RagTraceContext#currentNodeId / #depth / #clear', note: '父节点、深度与 finally 清理都依赖当前线程中的 nodeStack。' }
+          ],
+          coveredMethods: [
+            'RagTraceContext#setTraceId',
+            'RagTraceContext#setTaskId',
+            'RagTraceContext#currentNodeId',
+            'RagTraceContext#depth',
+            'RagTraceContext#clear'
+          ],
+          implementationNotes: [
+            { key: '上下文字段', value: '真实透传的核心字段只有 TRACE_ID、TASK_ID 与 NODE_STACK。' },
+            { key: '线程模型', value: '上下文通过 TTL 透传到异步线程池，而不是额外的 Trace Session 对象。' }
+          ]
+        } },
+      { id: 'tr-3', name: '节点开始埋点', type: 'storage',
+        javaClass: 'RagTraceAspect#aroundNode → RagTraceRecordService#startNode',
+        desc: '命中 @RagTraceNode 且当前线程已有 traceId 时，读取栈顶 parentNodeId 和 depth，先插入节点记录为 RUNNING，再压栈进入业务执行。',
+        input: 'RagTraceNode 注解 + currentNodeId',
+        output: 'RagTraceNodeDO（RUNNING）',
+        config: '@Order(HIGHEST_PRECEDENCE + 10)，maxErrorLength=1000',
+        error: '无 traceId 时直接透传；startNode 持久化异常会继续向上抛出',
+        detail: {
+          eventSequence: [
+            { title: '校验是否可记录', method: 'RagTraceAspect#aroundNode', note: 'trace 未开启或 traceId 为空时，直接执行目标方法，不记录节点。' },
+            { title: '生成 nodeId 与父节点信息', method: 'RagTraceContext#currentNodeId / #depth', note: 'parentNodeId 取当前栈顶，depth 等于当前栈深。' },
+            { title: '写入节点开始记录', method: 'RagTraceRecordServiceImpl#startNode', write: 't_rag_trace_node INSERT，status=RUNNING' },
+            { title: '压栈当前节点', method: 'RagTraceContext#pushNode', note: '后续嵌套节点会将当前 nodeId 作为 parentNodeId。' }
+          ],
+          coveredMethods: [
+            'RagTraceAspect#aroundNode',
+            'RagTraceRecordServiceImpl#startNode',
+            'RagTraceContext#pushNode'
+          ],
+          implementationNotes: [
+            { key: '父子关系', value: 'parentNodeId 与 depth 来自 TransmittableThreadLocal 节点栈，而不是后置构树。' },
+            { key: '透传规则', value: '没有 traceId 的方法调用不会补写 Trace 节点。' }
+          ]
+        } },
+      { id: 'tr-4', name: '执行业务节点', type: 'data',
+        javaClass: 'QueryRewriteService / IntentResolver / RetrievalEngine / RoutingLLMService',
+        desc: '真正被 @RagTraceNode 包裹的方法继续执行业务逻辑，例如问题改写、意图解析、检索、模型路由等；Trace 只记录边界，不接管业务实现。',
+        input: '目标方法参数',
+        output: '真实业务结果',
+        config: '仅覆盖显式标注 @RagTraceNode 的方法',
+        error: '业务异常会回抛，由切面写 ERROR 后继续向上冒泡',
+        detail: {
+          eventSequence: [
+            { title: '执行目标方法', method: 'ProceedingJoinPoint#proceed', note: 'Trace 仅围绕方法边界记录，不改变业务入参与返回值。' },
+            { title: '覆盖核心阶段', method: 'QueryRewriteService#rewriteWithSplit / IntentResolver#resolve / RetrievalEngine#retrieve / RoutingLLMService#streamChat', note: '这些被显式标注的方法会出现在后台详情节点列表里。' }
+          ],
+          coveredMethods: [
+            'QueryRewriteService#rewriteWithSplit',
+            'IntentResolver#resolve',
+            'RetrievalEngine#retrieve',
+            'RoutingLLMService#streamChat'
+          ],
+          implementationNotes: [
+            { key: '覆盖口径', value: '当前 Trace 只覆盖显式加了 @RagTraceNode 或 @RagTraceRoot 的方法。' },
+            { key: '职责边界', value: 'Trace 不负责业务重试、降级或熔断，只做记录。' }
+          ]
+        } },
+      { id: 'tr-5', name: '节点结束回写', type: 'storage',
+        javaClass: 'RagTraceAspect#aroundNode → RagTraceRecordService#finishNode',
+        desc: '业务方法结束后回写节点状态、结束时间与耗时；成功写 SUCCESS，异常写 ERROR，最后从 nodeStack 中弹出当前节点。',
+        input: 'traceId + nodeId + status',
+        output: '节点记录更新结果',
+        config: '表：t_rag_trace_node',
+        error: 'finishNode 异常会继续向上抛出；异常路径仍会先尝试写 ERROR',
+        detail: {
+          eventSequence: [
+            { title: '成功路径回写', method: 'RagTraceRecordServiceImpl#finishNode', write: 't_rag_trace_node UPDATE，status=SUCCESS' },
+            { title: '异常路径回写', method: 'RagTraceRecordServiceImpl#finishNode', write: 't_rag_trace_node UPDATE，status=ERROR + errorMessage' },
+            { title: '释放当前节点', method: 'RagTraceContext#popNode', note: 'finally 中弹出当前 nodeId，恢复父节点上下文。' }
+          ],
+          coveredMethods: [
+            'RagTraceRecordServiceImpl#finishNode',
+            'RagTraceContext#popNode'
+          ],
+          implementationNotes: [
+            { key: '异常策略', value: '切面会先写 ERROR，再将原始异常重新抛出。' },
+            { key: '写入方式', value: '节点完成状态通过同步 update 回写，不做批量 flush。' }
+          ]
+        } },
+      { id: 'tr-6', name: 'Run 结束回写', type: 'storage',
+        javaClass: 'ChatRateLimitAspect#invokeWithTrace → RagTraceRecordService#finishRun',
+        desc: 'chat 方法返回后更新运行记录为 SUCCESS；若抛异常则更新为 ERROR，并调用 emitter.completeWithError(cause) 收尾。该时机更接近方法返回，而不是前端真正收完全部 SSE 内容。',
+        input: 'traceId + status + durationMs',
+        output: 'RagTraceRunDO 更新',
+        config: '表：t_rag_trace_run',
+        error: '异常路径 finishRun(ERROR) 后由 emitter.completeWithError(cause) 收尾',
+        detail: {
+          eventSequence: [
+            { title: '方法成功返回', method: 'ChatRateLimitAspect#invokeWithTrace', note: '目标 chat 方法正常返回时立即进入 SUCCESS 收尾。' },
+            { title: '回写运行状态', method: 'RagTraceRecordServiceImpl#finishRun', write: 't_rag_trace_run UPDATE，status=SUCCESS / ERROR' },
+            { title: '异常结束收尾', method: 'SseEmitter#completeWithError', note: '异常路径会在 finishRun(ERROR) 后主动结束当前 SSE 发射器。' },
+            { title: '清理 Trace 上下文', method: 'RagTraceContext#clear', note: 'finally 中移除 TRACE_ID、TASK_ID 与 NODE_STACK。' }
+          ],
+          coveredMethods: [
+            'RagTraceRecordServiceImpl#finishRun',
+            'SseEmitter#completeWithError',
+            'RagTraceContext#clear'
+          ],
+          implementationNotes: [
+            { key: '结束时机', value: 'SUCCESS 更接近 streamChat 方法返回，不等于前端一定已经接收完全部 SSE 文本块。' },
+            { key: '异常链路', value: '异常时会先更新 run 状态，再由 emitter.completeWithError(cause) 收尾。' }
+          ]
+        } },
+      { id: 'tr-7', name: '后台分页与详情查询', type: 'user',
+        javaClass: 'RagTraceController#pageRuns + RagTraceQueryServiceImpl#detail',
+        desc: '后台列表页查询运行记录，详情接口联查 run + nodes；节点列表按 startTime、id 升序返回，交给前端做时序化展示。',
+        input: 'traceId',
+        output: 'RagTraceDetailVO（run + nodes）',
+        config: 'GET /rag/traces/runs, GET /rag/traces/{traceId}',
+        error: 'traceId 不存在时 detail 返回空',
+        detail: {
+          eventSequence: [
+            { title: '分页查运行记录', method: 'RagTraceQueryServiceImpl#pageRuns', note: '后端支持按 traceId / conversationId / taskId / status 过滤，并按 startTime 倒序分页。' },
+            { title: '查询单条详情', method: 'RagTraceQueryServiceImpl#detail', note: '先查 run，再调用 listNodes(traceId) 拉取平铺节点列表。' },
+            { title: '节点有序返回', method: 'RagTraceQueryServiceImpl#listNodes', write: '按 startTime、id 升序返回 List<RagTraceNodeVO>' }
+          ],
+          coveredMethods: [
+            'RagTraceController#pageRuns',
+            'RagTraceQueryServiceImpl#pageRuns',
+            'RagTraceQueryServiceImpl#detail',
+            'RagTraceQueryServiceImpl#listNodes'
+          ],
+          implementationNotes: [
+            { key: '返回结构', value: '后端详情直接返回 RagTraceDetailVO(run + nodes)，不会在服务层按 parentNodeId 构树。' },
+            { key: '列表过滤', value: '接口支持多条件过滤，但当前列表页默认只暴露 Trace Id 搜索入口。' }
+          ]
+        } },
+      { id: 'tr-8', name: '前端列表与瀑布图', type: 'data',
+        javaClass: 'ragTraceService.ts + RagTracePage.tsx + RagTraceDetailPage.tsx',
+        desc: '前端列表页聚焦 Trace Id 检索，详情页按时间窗绘制瀑布图/时序条，使用状态颜色、缩进深度和慢节点高亮帮助定位问题。',
+        input: 'RagTraceDetailVO',
+        output: '运行列表 + 节点瀑布图',
+        config: '搜索 Trace Id，点击行跳转详情页',
+        error: '',
+        detail: {
+          eventSequence: [
+            { title: '加载运行列表', method: 'getRagTraceRuns + RagTracePage', note: '列表页当前通过输入框查询 Trace Id，并展示成功率、平均耗时和 P95。' },
+            { title: '进入详情页', method: 'RunsTable#onOpenRun → /admin/traces/:traceId', note: '点击任意运行记录即可进入详情分析。' },
+            { title: '绘制瀑布图', method: 'getRagTraceDetail + RagTraceDetailPage', note: '详情页按节点开始时间与耗时绘制时序条，并高亮慢节点与失败节点。' }
+          ],
+          coveredMethods: [
+            'ragTraceService.ts#getRagTraceRuns',
+            'ragTraceService.ts#getRagTraceDetail',
+            'RagTracePage',
+            'RagTraceDetailPage'
+          ],
+          implementationNotes: [
+            { key: '列表页能力', value: '当前列表页默认只暴露 Trace Id 搜索，但后端接口本身支持更多过滤条件。' },
+            { key: '详情页能力', value: '详情页不是树视图，而是带深度缩进的瀑布图/时间线展示。' }
+          ]
+        } }
+    ]
+  },
+  /* ========== 链路 8：MCP 工具调用链路 ========== */
+  {
+    id: 'mcp',
+    title: 'MCP 工具调用链路',
+    subtitle: '工具协议',
+    icon: '🔧',
+    iconBg: '#cba6f7',
+    desc: '独立的 MCP Server 模块实现 JSON-RPC 2.0 协议，支持 tools/list 和 tools/call，供外部 LLM Agent 作为标准工具接入。',
+    tags: ['JSON-RPC 2.0', 'MCP 协议', '工具注册', 'HTTP'],
+    decisions: [
+      { condition: 'method == initialize', branch: '初始化握手', action: '返回 protocolVersion + serverInfo + capabilities' },
+      { condition: 'method == tools/list', branch: '列出工具', action: '返回所有注册执行器的 Schema' },
+      { condition: 'method == tools/call', branch: '调用工具', action: '路由到对应 MCPToolExecutor.execute' },
+      { condition: '未知 method', branch: '错误返回', action: 'JsonRpcError.METHOD_NOT_FOUND' }
+    ],
+    nodes: [
+      { id: 'mcp-1', name: '客户端 JSON-RPC 请求', type: 'user',
+        javaClass: 'HTTP POST /mcp',
+        desc: 'Agent 客户端（或外部 LLM）通过 HTTP POST 发送符合 JSON-RPC 2.0 规范的请求体：{jsonrpc, id, method, params}。',
+        input: 'JsonRpcRequest',
+        output: '进入 MCP Server',
+        config: 'mcp.server.port',
+        error: '非法 JSON 返回 JsonRpcError.PARSE_ERROR' },
+      { id: 'mcp-2', name: '协议分发', type: 'decision',
+        javaClass: 'MCPDispatcher#dispatch',
+        desc: '根据 method 路由：initialize / tools/list / tools/call；Notification（无 id）仅记录日志不返回。',
+        input: 'JsonRpcRequest',
+        output: '路由分支',
+        config: 'protocolVersion: 2026-02-28',
+        error: '未知 method → METHOD_NOT_FOUND' },
+      { id: 'mcp-3', name: '列出工具', type: 'data',
+        javaClass: 'MCPToolRegistry#listAllTools',
+        desc: '从注册表获取所有 Spring 自动发现的 MCPToolExecutor，转换为 MCPToolSchema 列表返回。',
+        input: '',
+        output: 'List<MCPToolSchema>',
+        config: '自动扫描 @Component 实现 MCPToolExecutor',
+        error: '' },
+      { id: 'mcp-4', name: '查找执行器', type: 'data',
+        javaClass: 'MCPToolRegistry#getExecutor(toolId)',
+        desc: '通过 tools/call 请求中的 name 查找注册表，当前已注册：WeatherMCPExecutor / SalesMCPExecutor / TicketMCPExecutor。',
+        input: 'toolId',
+        output: 'Optional<MCPToolExecutor>',
+        config: '',
+        error: '工具不存在返回 TOOL_NOT_FOUND 错误内容' },
+      { id: 'mcp-5', name: '参数绑定', type: 'data',
+        javaClass: 'MCPToolRequest.builder',
+        desc: '从 params.arguments 构建 MCPToolRequest（toolId + parameters Map + 可选 userId/conversationId/userQuestion）。',
+        input: 'params',
+        output: 'MCPToolRequest',
+        config: '',
+        error: '参数类型错误 → INVALID_PARAMS' },
+      { id: 'mcp-6', name: '执行业务逻辑', type: 'ai',
+        javaClass: 'XXXMCPExecutor#execute',
+        desc: '具体工具实现执行业务逻辑（如查询天气/销售/工单），返回文本结果 + 可选结构化 data + 耗时 costMs。',
+        input: 'MCPToolRequest',
+        output: 'MCPToolResponse',
+        config: '',
+        error: '业务异常被 dispatcher catch，isError=true 返回' },
+      { id: 'mcp-7', name: '构建响应', type: 'data',
+        javaClass: 'MCPDispatcher#handleToolsCall',
+        desc: '将 MCPToolResponse 包装为 MCP 标准响应结构：content[{type:text, text}] + isError，封装到 JsonRpcResponse。',
+        input: 'MCPToolResponse',
+        output: 'JsonRpcResponse',
+        config: '',
+        error: '' },
+      { id: 'mcp-8', name: '返回客户端', type: 'user',
+        javaClass: 'HTTP 200 + JSON',
+        desc: '以 application/json 返回 JSON-RPC 响应体给客户端，由 LLM Agent 解析并继续后续推理。',
+        input: 'JsonRpcResponse',
+        output: 'HTTP 响应',
+        config: '',
+        error: '' }
+    ]
+  },
+  /* ========== 链路 9：用户登录与鉴权链路 ========== */
+  {
+    id: 'auth',
+    title: '用户登录与鉴权链路',
+    subtitle: '安全与上下文',
+    icon: '🔐',
+    iconBg: '#89b4fa',
+    desc: '基于 Sa-Token 的登录态管理 + 拦截器链，登录签发 token 后每次请求通过 UserContextInterceptor 将用户信息透传到 ThreadLocal，供业务层使用。',
+    tags: ['Sa-Token', 'UserContext', 'TransmittableThreadLocal', '拦截器链', '角色校验'],
+    decisions: [
+      { condition: 'DispatcherType == ASYNC', branch: 'SSE 异步回调', action: '跳过上下文注入（SaToken 上下文已丢失）' },
+      { condition: 'OPTIONS 预检请求', branch: 'CORS 放行', action: '直接返回不处理' },
+      { condition: '已登录', branch: '正常业务', action: '注入 LoginUser 到 UserContext' },
+      { condition: '未登录', branch: '拦截', action: 'SaInterceptor 抛出 NotLoginException → 401' },
+      { condition: '@StpUtil.checkRole("admin") 失败', branch: '越权', action: '抛出 NotRoleException → 403' }
+    ],
+    nodes: [
+      { id: 'au-1', name: '前端登录请求', type: 'user',
+        javaClass: 'authStore#login / authService#login',
+        desc: '登录页提交用户名+密码，POST /auth/login 获取 token；成功后写入 localStorage 并设置 api 默认 Authorization 头。',
+        input: 'username + password',
+        output: 'LoginVO { userId, role, token, avatar }',
+        config: 'api 基地址：VITE_API_BASE_URL',
+        error: '401/400 错误 toast 提示' },
+      { id: 'au-2', name: '登录服务', type: 'data',
+        javaClass: 'AuthServiceImpl#login',
+        desc: '按 username 查询 UserDO → 校验密码 → StpUtil.login(userId) 签发 token。目前密码为明文比对（TODO：升级 BCrypt）。',
+        input: 'LoginRequest',
+        output: 'LoginVO（含 StpUtil.getTokenValue()）',
+        config: 'Sa-Token 配置：sa-token.token-name, timeout',
+        error: '用户不存在或密码错 → ClientException("用户名或密码错误")' },
+      { id: 'au-3', name: 'Token 持久化', type: 'storage',
+        javaClass: 'Sa-Token RedisSession',
+        desc: 'token 与 userId 的映射存入 Redis（支持多实例共享）；前端将 token 写入 localStorage（ragent_token）持久化。',
+        input: 'userId ↔ token',
+        output: 'Redis 键值 + 浏览器本地存储',
+        config: 'Redis prefix: satoken:login:token:...',
+        error: 'Redis 宕机 → 登录态失效' },
+      { id: 'au-4', name: '后续请求携带 Token', type: 'user',
+        javaClass: 'axios interceptor (api.ts)',
+        desc: '前端 api 实例为每个请求自动添加 Authorization: satoken <token> 请求头；401 响应时自动清理本地 token 并跳转登录页。',
+        input: '任意受保护接口请求',
+        output: '带 token 的 HTTP 请求',
+        config: 'setAuthToken()',
+        error: '401 自动登出' },
+      { id: 'au-5', name: 'SaInterceptor 登录拦截', type: 'decision',
+        javaClass: 'SaTokenConfig#addInterceptors',
+        desc: '除白名单（/auth/login 等）外，对所有请求调用 StpUtil.checkLogin()；失败抛 NotLoginException 被全局异常处理器映射为 401。',
+        input: 'HttpServletRequest',
+        output: '放行 / 401',
+        config: '排除路径：/auth/**, 健康检查等',
+        error: 'NotLoginException → 401' },
+      { id: 'au-6', name: '用户上下文注入', type: 'data',
+        javaClass: 'UserContextInterceptor#preHandle',
+        desc: '根据 StpUtil.getLoginIdAsString() 查询 UserDO 并封装为 LoginUser 写入 UserContext（TransmittableThreadLocal，支持线程池透传）；ASYNC 请求跳过避免 SSE 回调崩溃。',
+        input: 'loginId',
+        output: 'UserContext.set(LoginUser)',
+        config: 'TransmittableThreadLocal',
+        error: '用户不存在不会抛异常，但后续业务取不到上下文会 ClientException' },
+      { id: 'au-7', name: '业务层访问', type: 'data',
+        javaClass: 'UserContext.getUserId / requireUser',
+        desc: '业务层通过静态方法读取当前用户（userId/role/avatar），AOP 切面、MQ 生产者、异步任务均可透传使用。',
+        input: '',
+        output: 'LoginUser 或 null',
+        config: '',
+        error: 'requireUser 未登录时抛 ClientException("未获取到当前登录用户")' },
+      { id: 'au-8', name: '角色权限校验', type: 'decision',
+        javaClass: 'StpUtil.checkRole("admin") + SaTokenStpInterfaceImpl',
+        desc: '管理接口（如 /users, /dashboard）通过 @SaCheckRole 或手动 checkRole 校验；SaTokenStpInterfaceImpl 从 UserDO 读取 role 字段返回权限列表。',
+        input: '当前登录用户的 role',
+        output: '通过 / NotRoleException',
+        config: '角色：admin / user',
+        error: '403 Forbidden' },
+      { id: 'au-9', name: '请求结束清理', type: 'async',
+        javaClass: 'UserContextInterceptor#afterCompletion',
+        desc: '请求处理完成后调用 UserContext.clear() 移除 TTL 中的线程变量，避免线程池复用时的数据污染。',
+        input: '',
+        output: 'TTL 清理完毕',
+        config: '',
+        error: '' },
+      { id: 'au-10', name: '登出', type: 'user',
+        javaClass: 'AuthController#logout → StpUtil.logout()',
+        desc: '调用 StpUtil.logout() 删除 Redis 中的 token 记录；前端 authStore.logout() 清理 localStorage、取消正在进行的 SSE 流，重置 chat store。',
+        input: 'Bearer token',
+        output: 'Redis 清理 + 前端状态重置',
+        config: '',
+        error: '网络失败前端也会强制清理本地状态' }
+    ]
+  },
+  /* ========== 链路 10：管理后台 Dashboard 统计链路 ========== */
+  {
+    id: 'dashboard',
+    title: '管理后台 Dashboard 统计链路',
+    subtitle: '数据分析',
+    icon: '📊',
+    iconBg: '#a6e3a1',
+    desc: '管理员在后台查看 KPI 概览（用户/会话/消息）、性能指标（平均响应、P95、错误率、无知识率、慢响应率）和多维度趋势图，数据源聚合自消息表与 Trace 表。',
+    tags: ['KPI', 'P95 分位', '趋势聚合', '窗口对比', '按时/按天'],
+    decisions: [
+      { condition: '时间窗口 window', branch: '支持 1h/24h/7d/30d 等', action: '映射到 hour/day 粒度' },
+      { condition: 'metric=sessions/messages/activeusers', branch: '按日聚合', action: 'groupBy LocalDate' },
+      { condition: 'metric=avglatency/quality', branch: '按小时聚合', action: 'groupBy LocalDateTime hour' },
+      { condition: '无知识率计算', branch: '对 assistant 消息统计', action: '匹配固定回复文本"未检索到…"' }
+    ],
+    nodes: [
+      { id: 'db-1', name: 'Admin 请求概览', type: 'user',
+        javaClass: 'DashboardPage.tsx + dashboardService#getOverview',
+        desc: '管理员打开管理后台首页，GET /admin/dashboard/overview?window=24h 拉取 KPI 卡片数据。',
+        input: 'window 参数（可选）',
+        output: 'DashboardOverviewVO',
+        config: '',
+        error: '非 admin 角色 StpUtil.checkRole 拦截 403' },
+      { id: 'db-2', name: '并行查询 KPI', type: 'data',
+        javaClass: 'DashboardServiceImpl#loadOverview',
+        desc: '并行统计 6 类 KPI：总用户数、活跃用户、总会话、24h 会话、总消息、24h 消息；每个指标计算当前值 + 对比窗口的环比变化。',
+        input: 'window 映射的时间范围',
+        output: 'DashboardOverviewGroupVO',
+        config: 'UserMapper + ConversationMapper + ConversationMessageMapper',
+        error: '某个指标 SQL 失败兜底返回 0' },
+      { id: 'db-3', name: '性能指标查询', type: 'data',
+        javaClass: 'DashboardServiceImpl#loadPerformance',
+        desc: 'GET /admin/dashboard/performance：基于 t_rag_trace_run 的 durationMs 和 status 统计平均响应、P95、成功率、错误率、慢响应率(>20s)；基于 assistant 消息统计无知识率。',
+        input: 'window',
+        output: 'DashboardPerformanceVO（6 个指标）',
+        config: 'SLOW_LATENCY_THRESHOLD_MS=20000',
+        error: '无数据时返回 0.0' },
+      { id: 'db-4', name: '趋势图查询', type: 'data',
+        javaClass: 'DashboardServiceImpl#loadTrends',
+        desc: 'GET /admin/dashboard/trends?metric=X&window=Y&granularity=day|hour：支持 sessions/messages/activeusers/avglatency/quality 5 种指标的时间序列聚合。',
+        input: 'metric + window + granularity',
+        output: 'DashboardTrendsVO { series: [{name, data: [{ts, value}]}] }',
+        config: 'GRANULARITY_DAY / GRANULARITY_HOUR',
+        error: 'metric 非法返回空 series' },
+      { id: 'db-5', name: '时间窗口聚合', type: 'data',
+        javaClass: 'DashboardServiceImpl#countXxxByDay / ByHour',
+        desc: '按日粒度使用 LocalDate 键；按小时粒度使用 LocalDateTime hour 键；SQL 使用 date_trunc("day", create_time) 或 to_char 按时段 group by。',
+        input: 'startDay/startHour + endExclusive + zoneId',
+        output: 'Map<LocalDate|LocalDateTime, Long/Double>',
+        config: 'ZoneId.systemDefault()',
+        error: '' },
+      { id: 'db-6', name: '空洞填充', type: 'data',
+        javaClass: 'DashboardServiceImpl#buildPoints / buildPointsDouble',
+        desc: '对起止区间内每一个时间点填充数据，缺失时段补 0，保证前端折线图 X 轴连续无断点。',
+        input: 'start + end + counts Map',
+        output: 'List<DashboardTrendPointVO>',
+        config: '',
+        error: '' },
+      { id: 'db-7', name: '质量指标计算', type: 'ai',
+        javaClass: 'countNoDocMessagesByHour',
+        desc: '"质量"维度同时计算错误率和无知识率。无知识率 = 回复文本匹配 "未检索到与问题相关的文档内容。" 的 assistant 消息数 / 总 assistant 消息数。',
+        input: 'assistant 消息 + trace run status',
+        output: '错误率 + 无知识率两条 Series',
+        config: 'NO_DOC_REPLY 常量',
+        error: '总数为 0 时返回 0.0 避免除零' },
+      { id: 'db-8', name: '前端可视化', type: 'user',
+        javaClass: 'SimpleLineChart.tsx + KPI Cards',
+        desc: '前端用 SimpleLineChart（纯 SVG 实现）渲染趋势图，KPI 卡片显示当前值和环比箭头；支持时间窗口切换自动刷新。',
+        input: 'DashboardOverviewVO + DashboardTrendsVO',
+        output: '可视化大盘',
+        config: '',
+        error: '数据加载失败显示 Skeleton 占位' }
+    ]
+  },
+  /* ========== 链路 11：知识库文档定时刷新链路 ========== */
+  {
+    id: 'schedule',
+    title: '知识库文档定时刷新链路',
+    subtitle: '定时任务',
+    icon: '⏰',
+    iconBg: '#fab387',
+    desc: '基于 Spring @Scheduled + 数据库分布式锁的定时文档重新抓取流水线，支持 Cron 表达式、ETag/Last-Modified 增量判断、卡死任务恢复。',
+    tags: ['Cron 调度', 'DB 分布式锁', 'ETag 增量', '卡死恢复', '多实例竞争'],
+    decisions: [
+      '仅 sourceType=URL 的文档支持定时刷新（其他类型跳过）',
+      '启用条件：scheduleEnabled=1 且 cron 合法且最小周期 ≥ 60s',
+      '增量判断：ETag / Last-Modified / contentHash 任一命中则跳过重解析',
+      '内容有变化：触发完整 executeChunk 重新分块+向量化',
+      'RUNNING 超过 runningTimeoutMinutes(默认30min)：重置为 FAILED 允许重试'
+    ],
+    nodes: [
+      { id: 'sc-1', name: '文档上传时注册定时', type: 'user',
+        javaClass: 'KnowledgeDocumentService#upload → KnowledgeDocumentScheduleService#upsertSchedule',
+        desc: '用户上传 URL 类型文档并设置 scheduleEnabled=1 + scheduleCron 时，自动 upsert 到 t_knowledge_document_schedule 表并计算首次 nextRunTime。',
+        input: 'KnowledgeDocumentDO（含 cronExpr）',
+        output: 'ScheduleDO 落库',
+        config: 'min-interval-seconds=60（最小调度周期）',
+        error: 'Cron 非法抛 ClientException("定时表达式不合法")；周期过短抛 ClientException' },
+      { id: 'sc-2', name: '定时扫描', type: 'async',
+        javaClass: 'KnowledgeDocumentScheduleJob#scan',
+        desc: '@Scheduled(fixedDelayString=${scan-delay-ms:10000}) 每 10s 查询 enabled=1 且 nextRunTime ≤ now 且未被锁定的任务，按 batchSize 批量取出。',
+        input: '',
+        output: 'List<ScheduleDO>',
+        config: 'scan-delay-ms=10000, batch-size=20',
+        error: '' },
+      { id: 'sc-3', name: '获取分布式锁', type: 'decision',
+        javaClass: 'ScheduleLockManager#tryAcquire',
+        desc: '基于 t_knowledge_document_schedule 表的 lock_owner + lock_until 字段 + 乐观 UPDATE 实现分布式锁（多实例部署安全）；lock_owner=hostname+UUID，lock_until=now+lockSeconds。',
+        input: 'scheduleId + now',
+        output: 'ScheduleLockLease 或 null',
+        config: 'lock-seconds=900（锁续期 15min）',
+        error: '抢锁失败（其他实例已持有）→ 跳过本次' },
+      { id: 'sc-4', name: '提交线程池异步执行', type: 'async',
+        javaClass: 'knowledgeChunkExecutor#execute',
+        desc: '获锁成功后提交到独立线程池异步执行，避免 @Scheduled 主线程被阻塞影响其他任务调度。',
+        input: 'ScheduleLockLease',
+        output: '异步任务进入队列',
+        config: '自定义 Executor bean: knowledgeChunkExecutor',
+        error: 'RejectedExecutionException → 主动释放锁记日志' },
+      { id: 'sc-5', name: '抓取远程文件', type: 'data',
+        javaClass: 'ScheduleRefreshProcessor#process → RemoteFileFetcher#fetch',
+        desc: '带上次 ETag 和 Last-Modified 发起 HTTP 请求，服务端 304 则视为未变化；否则下载新内容，计算 contentHash 与 lastContentHash 比较。',
+        input: 'sourceLocation + lastEtag + lastModified',
+        output: 'FetchResult（新字节 / 304 / 错误）',
+        config: '',
+        error: '网络错误写入 lastError，不触发解析' },
+      { id: 'sc-6', name: '增量判断', type: 'decision',
+        javaClass: 'ScheduleRefreshProcessor',
+        desc: '若 ETag/Last-Modified/contentHash 任一命中与上次相同，则认定未变化，仅更新调度元数据（lastRunTime、lastSuccessTime）后释放锁。',
+        input: '本次抓取结果 + ScheduleDO 上次记录',
+        output: '是否需要重新分块',
+        config: '',
+        error: '' },
+      { id: 'sc-7', name: '触发重新分块', type: 'data',
+        javaClass: 'KnowledgeDocumentServiceImpl#executeChunk (复用 Chunk 主链路)',
+        desc: '内容有变化时上传新文件到 S3 替换旧文件 → 清理历史向量和 chunk 表记录 → 执行完整解析分块嵌入流水线（复用链路2的能力）。',
+        input: '新文件 + docId',
+        output: '文档状态更新为 SUCCESS',
+        config: '',
+        error: '执行失败写入 t_knowledge_document_schedule_exec 的 status=FAILED' },
+      { id: 'sc-8', name: '写入执行记录', type: 'storage',
+        javaClass: 'KnowledgeDocumentScheduleExecMapper#insert',
+        desc: '每次调度执行（无论成功/跳过/失败）都写入 t_knowledge_document_schedule_exec：status、message、startTime、endTime、fileName、fileSize、etag、lastModified、contentHash。',
+        input: 'ScheduleExecDO',
+        output: '执行历史记录',
+        config: '表：t_knowledge_document_schedule_exec',
+        error: '' },
+      { id: 'sc-9', name: '计算下次执行时间', type: 'data',
+        javaClass: 'CronScheduleHelper#nextRunTime',
+        desc: '基于 Cron 表达式计算下一次执行时间并回写 ScheduleDO.nextRunTime，供下一轮 scan 识别。',
+        input: 'cronExpr + now',
+        output: 'nextRunTime',
+        config: '',
+        error: '' },
+      { id: 'sc-10', name: '释放锁', type: 'async',
+        javaClass: 'ScheduleLockManager#release',
+        desc: '无论成功失败都在 finally 中释放锁（清空 lock_owner、lock_until），允许其他实例下一轮调度。',
+        input: 'ScheduleLockLease',
+        output: '锁释放',
+        config: '',
+        error: '进程崩溃时依赖 lock_until 过期自动失效（15min 后）' },
+      { id: 'sc-11', name: '卡死任务恢复', type: 'async',
+        javaClass: 'KnowledgeDocumentScheduleJob#recoverStuckRunningDocuments',
+        desc: '独立定时任务（fixedDelay=60s）扫描 RUNNING 超过 runningTimeoutMinutes 的文档，重置为 FAILED 允许用户手动重试，应对进程崩溃等异常场景。',
+        input: '',
+        output: '恢复数量（日志）',
+        config: 'running-timeout-minutes=30, fixedDelay=60000, initialDelay=30000',
+        error: '' }
+    ]
+  }
+];
+
+/* ====================================================================================
+ *  渲染引擎
+ * ==================================================================================== */
+
+// 当前选中的链路索引
+let currentFlowIndex = 0;
+
+// 画布状态
+let scale = 1;
+let translateX = 0;
+let translateY = 0;
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+
+function getFlowStats() {
+  return FLOWS.reduce((stats, flow) => {
+    stats.flowCount += 1;
+    stats.nodeCount += Array.isArray(flow.nodes) ? flow.nodes.length : 0;
+    return stats;
+  }, { flowCount: 0, nodeCount: 0 });
+}
+
+function updateGlobalStats() {
+  const { flowCount, nodeCount } = getFlowStats();
+  const badge = document.getElementById('global-stats-badge');
+  if (badge) {
+    badge.textContent = `v1.5 · ${flowCount} 条核心链路 · ${nodeCount} 个节点`;
+  }
+}
+
+function formatDecision(decision) {
+  if (typeof decision === 'string') {
+    return decision;
+  }
+  if (!decision || typeof decision !== 'object') {
+    return '';
+  }
+
+  const condition = decision.condition ? `条件：${decision.condition}` : '';
+  const branch = decision.branch ? `分支：${decision.branch}` : '';
+  const action = decision.action ? `动作：${decision.action}` : '';
+
+  return [condition, branch, action].filter(Boolean).join(' ｜ ');
+}
+
+// ==================== 渲染左侧导航 ====================
+function renderNav() {
+  const container = document.getElementById('nav-container');
+  container.innerHTML = FLOWS.map((flow, idx) => `
+    <div class="nav-item ${idx === currentFlowIndex ? 'active' : ''}" onclick="selectFlow(${idx})">
+      <div class="nav-icon" style="background:color-mix(in srgb, ${flow.iconBg} 13%, transparent);color:${flow.iconBg}">${flow.icon}</div>
+      <div class="nav-text">
+        <div class="nav-text-title">${flow.title}</div>
+        <div class="nav-text-desc">${flow.subtitle} · ${flow.nodes.length}个节点</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ==================== 选择链路 ====================
+function selectFlow(idx) {
+  currentFlowIndex = idx;
+  renderNav();
+  renderFlowHeader();
+  renderFlowDiagram();
+  renderDecisions();
+  closeDetailPanel();
+  // 画布居中自适应
+  fitCanvasToView();
+}
+
+// ==================== 画布居中自适应 ====================
+function fitCanvasToView() {
+  const container = document.getElementById('canvas-container');
+  const svg = document.getElementById('canvas-svg');
+  const svgW = parseFloat(svg.getAttribute('width')) || 1;
+  const svgH = parseFloat(svg.getAttribute('height')) || 1;
+  const cw = container.clientWidth;
+  const ch = container.clientHeight;
+  const scaleX = cw / (svgW + 40);
+  const scaleY = ch / (svgH + 40);
+  scale = Math.min(1, scaleX, scaleY);
+  translateX = Math.max(10, (cw - svgW * scale) / 2);
+  translateY = Math.max(10, (ch - svgH * scale) / 2);
+  updateTransform();
+}
+
+// ==================== 渲染链路头部信息 ====================
+function renderFlowHeader() {
+  const flow = FLOWS[currentFlowIndex];
+  // 统计节点类型分布
+  const typeCount = {};
+  flow.nodes.forEach(n => { typeCount[n.type] = (typeCount[n.type] || 0) + 1; });
+  const statsHTML = Object.entries(typeCount).map(([type, count]) => {
+    const t = NODE_TYPES[type];
+    return `<span class="stat-chip"><span class="stat-chip-dot" style="background:${t.color}"></span>${t.label} × ${count}</span>`;
+  }).join('');
+
+  document.getElementById('flow-header').innerHTML = `
+    <div class="flow-header-title">${flow.icon} ${flow.title}</div>
+    <div class="flow-header-desc">${flow.desc}</div>
+    <div class="flow-header-tags">${flow.tags.map(t => `<span class="flow-tag">${t}</span>`).join('')}</div>
+    <div class="flow-header-stats">${statsHTML}</div>
+  `;
+}
+
+// ==================== 渲染决策点 ====================
+function renderDecisions() {
+  const flow = FLOWS[currentFlowIndex];
+  const bar = document.getElementById('decisions-bar');
+  if (!flow.decisions || flow.decisions.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  const decisionItems = flow.decisions
+    .map(formatDecision)
+    .filter(Boolean);
+
+  if (decisionItems.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'block';
+  bar.innerHTML = `
+    <div class="decisions-bar-title">关键决策点</div>
+    <div class="decisions-list">${decisionItems.map(d => `<span class="decision-chip">⚡ ${d}</span>`).join('')}</div>
+  `;
+}
+
+/* ====================================================================================
+ *  SVG 流程图绘制
+ * ==================================================================================== */
+
+// 节点尺寸常量
+const NODE_W = 180;
+const NODE_H = 52;
+const NODE_GAP_X = 60;
+const NODE_GAP_Y = 80;
+const PADDING_X = 60;
+const PADDING_Y = 40;
+
+/**
+ * 计算节点布局位置
+ * 链路1（qa）：12个节点，4列3行
+ * 链路4（memory）：有并行分支（3a, 3b），特殊布局
+ * 链路5（routing）：有分支，特殊布局
+ * 其余：线性排列，每行4个节点
+ */
+function computeLayout(flow) {
+  const nodes = flow.nodes;
+  const positions = [];
+
+  if (flow.id === 'qa') {
+    // 智能问答：显式展示歧义引导、SYSTEM直答、KB/MCP并行与空结果兜底
+    const layoutMap = {
+      'qa-1':  { col: 0, row: 1 },
+      'qa-2':  { col: 1, row: 1 },
+      'qa-3':  { col: 2, row: 1 },
+      'qa-4':  { col: 3, row: 1 },
+      'qa-5':  { col: 4, row: 1 },
+      'qa-6':  { col: 5, row: 1 },
+      'qa-6a': { col: 5, row: 0 },
+      'qa-7':  { col: 6, row: 1 },
+      'qa-8':  { col: 7, row: 2 },
+      'qa-9':  { col: 7, row: 3 },
+      'qa-10': { col: 8, row: 2 },
+      'qa-11': { col: 8, row: 1 },
+      'qa-12': { col: 8, row: 0 },
+      'qa-13': { col: 9, row: 1 },
+      'qa-14': { col: 10, row: 1 },
+      'qa-15': { col: 11, row: 1 }
+    };
+
+    nodes.forEach((node, i) => {
+      const preset = layoutMap[node.id] || { col: i, row: 1 };
+      positions.push({
+        x: PADDING_X + preset.col * (NODE_W + NODE_GAP_X),
+        y: PADDING_Y + preset.row * (NODE_H + NODE_GAP_Y),
+        node
+      });
+    });
+  } else if (flow.id === 'memory') {
+    // 会话记忆：mm-1, mm-2线性，然后mm-3a和mm-3b并行，之后继续线性
+    const col0X = PADDING_X;
+    const col1X = PADDING_X + NODE_W + NODE_GAP_X;
+    const col2X = PADDING_X + 2 * (NODE_W + NODE_GAP_X);
+    const col3X = PADDING_X + 3 * (NODE_W + NODE_GAP_X);
+
+    // 第0行：mm-1, mm-2
+    positions.push({ x: col0X, y: PADDING_Y, node: nodes[0] }); // mm-1
+    positions.push({ x: col1X, y: PADDING_Y, node: nodes[1] }); // mm-2
+
+    // 第1行：mm-3a, mm-3b（并行）
+    const row1Y = PADDING_Y + NODE_H + NODE_GAP_Y;
+    positions.push({ x: col0X + 40, y: row1Y, node: nodes[2] }); // mm-3a
+    positions.push({ x: col1X + 100, y: row1Y, node: nodes[3] }); // mm-3b
+
+    // 第2行：mm-4, mm-5, mm-6, mm-7
+    const row2Y = row1Y + NODE_H + NODE_GAP_Y;
+    positions.push({ x: col0X, y: row2Y, node: nodes[4] });
+    positions.push({ x: col1X, y: row2Y, node: nodes[5] });
+    positions.push({ x: col2X, y: row2Y, node: nodes[6] });
+    positions.push({ x: col3X, y: row2Y, node: nodes[7] });
+
+    // 第3行：mm-8, mm-9, mm-10
+    const row3Y = row2Y + NODE_H + NODE_GAP_Y;
+    positions.push({ x: col0X, y: row3Y, node: nodes[8] });
+    positions.push({ x: col1X, y: row3Y, node: nodes[9] });
+    positions.push({ x: col2X, y: row3Y, node: nodes[10] });
+
+  } else if (flow.id === 'routing') {
+    // 模型路由：有分支结构
+    const col0X = PADDING_X;
+    const col1X = PADDING_X + NODE_W + NODE_GAP_X;
+    const col2X = PADDING_X + 2 * (NODE_W + NODE_GAP_X);
+    const col3X = PADDING_X + 3 * (NODE_W + NODE_GAP_X);
+
+    // 第0行：rt-1, rt-2, rt-3, rt-4
+    const r0 = PADDING_Y;
+    positions.push({ x: col0X, y: r0, node: nodes[0] });
+    positions.push({ x: col1X, y: r0, node: nodes[1] });
+    positions.push({ x: col2X, y: r0, node: nodes[2] });
+    positions.push({ x: col3X, y: r0, node: nodes[3] });
+
+    // 第1行：rt-4a, rt-4b, rt-4c（三个状态分支）
+    const r1 = r0 + NODE_H + NODE_GAP_Y;
+    positions.push({ x: col0X, y: r1, node: nodes[4] });  // 4a OPEN
+    positions.push({ x: col1X, y: r1, node: nodes[5] });  // 4b HALF_OPEN
+    positions.push({ x: col2X, y: r1, node: nodes[6] });  // 4c CLOSED
+
+    // 第2行：rt-5, rt-6a, rt-6b
+    const r2 = r1 + NODE_H + NODE_GAP_Y;
+    positions.push({ x: col1X, y: r2, node: nodes[7] });  // rt-5
+    positions.push({ x: col2X, y: r2, node: nodes[8] });  // rt-6a
+    positions.push({ x: col3X, y: r2, node: nodes[9] });  // rt-6b
+
+    // 第3行：rt-7, rt-8
+    const r3 = r2 + NODE_H + NODE_GAP_Y;
+    positions.push({ x: col2X, y: r3, node: nodes[10] }); // rt-7
+    positions.push({ x: col3X, y: r3, node: nodes[11] }); // rt-8
+
+  } else {
+    // 默认线性布局：每行4个
+    const cols = 4;
+    nodes.forEach((node, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      positions.push({
+        x: PADDING_X + col * (NODE_W + NODE_GAP_X),
+        y: PADDING_Y + row * (NODE_H + NODE_GAP_Y),
+        node
+      });
+    });
+  }
+
+  return positions;
+}
+
+/**
+ * 计算连线数据
+ */
+function computeEdges(flow, positions) {
+  const edges = [];
+  const posMap = {};
+  positions.forEach((p, i) => { posMap[p.node.id] = { ...p, index: i }; });
+
+  if (flow.id === 'qa') {
+    // qa-1 → qa-6 主干
+    edges.push({ from: posMap['qa-1'].index, to: posMap['qa-2'].index });
+    edges.push({ from: posMap['qa-2'].index, to: posMap['qa-3'].index });
+    edges.push({ from: posMap['qa-3'].index, to: posMap['qa-4'].index });
+    edges.push({ from: posMap['qa-4'].index, to: posMap['qa-5'].index });
+    edges.push({ from: posMap['qa-5'].index, to: posMap['qa-6'].index });
+
+    // 歧义引导：提前结束
+    edges.push({ from: posMap['qa-6'].index, to: posMap['qa-6a'].index, label: 'PROMPT', style: 'dashed' });
+
+    // 明确意图：继续进入分支判断
+    edges.push({ from: posMap['qa-6'].index, to: posMap['qa-7'].index, label: 'NONE' });
+
+    // SYSTEM 直答
+    edges.push({ from: posMap['qa-7'].index, to: posMap['qa-13'].index, label: 'SYSTEM' });
+
+    // RETRIEVAL 分支：KB 与 MCP 分别构建上下文后汇合
+    edges.push({ from: posMap['qa-7'].index, to: posMap['qa-8'].index, label: 'KB' });
+    edges.push({ from: posMap['qa-7'].index, to: posMap['qa-9'].index, label: 'MCP' });
+    edges.push({ from: posMap['qa-8'].index, to: posMap['qa-10'].index });
+    edges.push({ from: posMap['qa-9'].index, to: posMap['qa-10'].index });
+
+    // 结果判空
+    edges.push({ from: posMap['qa-10'].index, to: posMap['qa-11'].index });
+    edges.push({ from: posMap['qa-11'].index, to: posMap['qa-12'].index, label: 'EMPTY', style: 'dashed' });
+    edges.push({ from: posMap['qa-11'].index, to: posMap['qa-13'].index, label: 'CONTINUE' });
+
+    // 消息组装 → 流式输出 → 后处理
+    edges.push({ from: posMap['qa-13'].index, to: posMap['qa-14'].index });
+    edges.push({ from: posMap['qa-14'].index, to: posMap['qa-15'].index });
+  } else if (flow.id === 'memory') {
+    // mm-1→mm-2
+    edges.push({ from: 0, to: 1 });
+    // mm-2→mm-3a（并行）, mm-2→mm-3b（并行）
+    edges.push({ from: 1, to: 2, label: '并行' });
+    edges.push({ from: 1, to: 3, label: '并行' });
+    // mm-3a→mm-4, mm-3b→mm-4
+    edges.push({ from: 2, to: 4 });
+    edges.push({ from: 3, to: 4 });
+    // mm-4→mm-5→mm-6→mm-7
+    edges.push({ from: 4, to: 5 });
+    edges.push({ from: 5, to: 6 });
+    edges.push({ from: 6, to: 7 });
+    // mm-7→mm-8→mm-9→mm-10
+    edges.push({ from: 7, to: 8 });
+    edges.push({ from: 8, to: 9 });
+    edges.push({ from: 9, to: 10, label: '≥5轮' });
+  } else if (flow.id === 'routing') {
+    // rt-1→rt-2→rt-3→rt-4
+    edges.push({ from: 0, to: 1 });
+    edges.push({ from: 1, to: 2 });
+    edges.push({ from: 2, to: 3 });
+    // rt-4→三个分支 4a, 4b, 4c
+    edges.push({ from: 3, to: 4, label: 'OPEN' });
+    edges.push({ from: 3, to: 5, label: 'HALF_OPEN' });
+    edges.push({ from: 3, to: 6, label: 'CLOSED' });
+    // 4a→回到rt-3（遍历下一个）
+    edges.push({ from: 4, to: 2, label: '下一个', style: 'dashed' });
+    // 4b→rt-5, 4c→rt-5
+    edges.push({ from: 5, to: 7 });
+    edges.push({ from: 6, to: 7 });
+    // rt-5→rt-6a（成功）, rt-5→rt-6b（失败）
+    edges.push({ from: 7, to: 8, label: '成功' });
+    edges.push({ from: 7, to: 9, label: '失败' });
+    // rt-6b→rt-7
+    edges.push({ from: 9, to: 10 });
+    // rt-7→rt-3（回去重试）
+    edges.push({ from: 10, to: 2, label: '重试', style: 'dashed' });
+    // rt-7→rt-8（熔断）
+    edges.push({ from: 10, to: 11, label: '全部失败' });
+  } else {
+    // 线性连接
+    for (let i = 0; i < positions.length - 1; i++) {
+      edges.push({ from: i, to: i + 1 });
+    }
+  }
+
+  return edges;
+}
+
+/**
+ * 渲染流程图 SVG
+ */
+function renderFlowDiagram() {
+  const flow = FLOWS[currentFlowIndex];
+  const positions = computeLayout(flow);
+  const edges = computeEdges(flow, positions);
+
+  // 计算SVG尺寸
+  let maxX = 0, maxY = 0;
+  positions.forEach(p => {
+    if (p.x + NODE_W > maxX) maxX = p.x + NODE_W;
+    if (p.y + NODE_H > maxY) maxY = p.y + NODE_H;
+  });
+  const svgW = maxX + PADDING_X * 2;
+  const svgH = maxY + PADDING_Y * 2;
+
+  const svg = document.getElementById('canvas-svg');
+  svg.setAttribute('width', svgW);
+  svg.setAttribute('height', svgH);
+
+  let html = '';
+
+  // 定义箭头标记
+  html += `
+    <defs>
+      <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" fill="var(--text-muted)">
+        <polygon points="0 0, 10 3.5, 0 7" />
+      </marker>
+      <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" fill="var(--accent-red)" opacity="0.6">
+        <polygon points="0 0, 10 3.5, 0 7" />
+      </marker>
+    </defs>
+  `;
+
+  // 绘制连线
+  edges.forEach(edge => {
+    const from = positions[edge.from];
+    const to = positions[edge.to];
+    const isDashed = edge.style === 'dashed';
+
+    // 计算起终点（从节点边缘出发）
+    let x1, y1, x2, y2;
+    const fromCX = from.x + NODE_W / 2;
+    const fromCY = from.y + NODE_H / 2;
+    const toCX = to.x + NODE_W / 2;
+    const toCY = to.y + NODE_H / 2;
+
+    // 确定连接方向
+    const dx = toCX - fromCX;
+    const dy = toCY - fromCY;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // 水平方向为主
+      if (dx > 0) {
+        x1 = from.x + NODE_W; y1 = fromCY;
+        x2 = to.x; y2 = toCY;
+      } else {
+        x1 = from.x; y1 = fromCY;
+        x2 = to.x + NODE_W; y2 = toCY;
+      }
+    } else {
+      // 垂直方向为主
+      if (dy > 0) {
+        x1 = fromCX; y1 = from.y + NODE_H;
+        x2 = toCX; y2 = to.y;
+      } else {
+        x1 = fromCX; y1 = from.y;
+        x2 = toCX; y2 = to.y + NODE_H;
+      }
+    }
+
+    // 贝塞尔曲线中点
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+
+    // 根据方向生成曲线
+    let pathD;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      pathD = `M${x1},${y1} C${x1 + (x2 - x1) * 0.4},${y1} ${x2 - (x2 - x1) * 0.4},${y2} ${x2},${y2}`;
+    } else {
+      pathD = `M${x1},${y1} C${x1},${y1 + (y2 - y1) * 0.4} ${x2},${y2 - (y2 - y1) * 0.4} ${x2},${y2}`;
+    }
+
+    const markerEnd = isDashed ? 'url(#arrowhead-dashed)' : 'url(#arrowhead)';
+    const strokeColor = isDashed ? 'var(--accent-red)' : 'var(--text-muted)';
+    const strokeOpacity = isDashed ? '0.5' : '0.5';
+    const dashArray = isDashed ? '6,4' : 'none';
+    const edgeClass = isDashed ? 'edge-path edge-path-dashed' : 'edge-path';
+
+    html += `<path class="${edgeClass}" data-from="${edge.from}" data-to="${edge.to}" 
+              d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="1.5" 
+              stroke-opacity="${strokeOpacity}" stroke-dasharray="${dashArray}" 
+              marker-end="${markerEnd}" />`;
+
+    // 绘制标签
+    if (edge.label) {
+      const labelBg = isDashed ? 'rgba(243,139,168,0.12)' : 'rgba(108,112,134,0.15)';
+      const labelColor = isDashed ? 'var(--accent-red)' : 'var(--text-muted)';
+      const textLen = edge.label.length * 7 + 12;
+      html += `<rect x="${midX - textLen/2}" y="${midY - 16}" width="${textLen}" height="16" rx="4" fill="${labelBg}" />`;
+      html += `<text x="${midX}" y="${midY - 5}" text-anchor="middle" fill="${labelColor}" 
+                font-size="10" font-weight="500">${edge.label}</text>`;
+    }
+  });
+
+  // 绘制节点
+  positions.forEach((pos, idx) => {
+    const node = pos.node;
+    const typeInfo = NODE_TYPES[node.type];
+    const color = typeInfo.color;
+    const bgColor = color + '1a'; // 10% 透明度
+
+    // 决策节点用菱形效果（圆角矩形+斜角背景区分即可，真菱形在小尺寸可读性不好）
+    // 统一使用圆角矩形但配色不同
+    const rx = node.type === 'decision' ? 4 : 8;
+
+    html += `
+      <g class="flow-node" data-idx="${idx}" 
+         onclick="showNodeDetail('${node.id}')" 
+         onmouseenter="highlightNode(${idx}, true)"
+         onmouseleave="highlightNode(${idx}, false)"
+         transform="translate(${pos.x}, ${pos.y})">
+        <title>${node.name} · ${typeInfo.label}${node.javaClass ? ' · ' + node.javaClass : ''}</title>
+        <rect width="${NODE_W}" height="${NODE_H}" rx="${rx}" ry="${rx}" 
+              fill="${bgColor}" stroke="${color}" stroke-width="1.5" />
+        <line x1="0" y1="26" x2="${NODE_W}" y2="26" stroke="${color}" stroke-opacity="0.15" stroke-width="1" />
+        <text x="${NODE_W / 2}" y="18" text-anchor="middle" fill="${color}" 
+              font-size="12" font-weight="700">${truncateText(node.name, 14)}</text>
+        <text x="${NODE_W / 2}" y="40" text-anchor="middle" fill="var(--text-muted)" 
+              font-size="10">${typeInfo.label}</text>
+        <circle cx="${NODE_W - 14}" cy="12" r="8" fill="${color}" opacity="0.2" />
+        <text x="${NODE_W - 14}" y="15.5" text-anchor="middle" fill="${color}" 
+              font-size="9" font-weight="600">${idx + 1}</text>
+      </g>
+    `;
+  });
+
+  svg.innerHTML = html;
+}
+
+// ==================== 文本截断 ====================
+function truncateText(text, maxLen) {
+  return text.length > maxLen ? text.substring(0, maxLen - 1) + '…' : text;
+}
+
+/* ====================================================================================
+ *  缩放与拖拽
+ * ==================================================================================== */
+
+function updateTransform() {
+  const svg = document.getElementById('canvas-svg');
+  svg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+  document.getElementById('zoom-info').textContent = Math.round(scale * 100) + '%';
+}
+
+function zoomIn() {
+  scale = Math.min(scale + 0.15, 3);
+  updateTransform();
+}
+
+function zoomOut() {
+  scale = Math.max(scale - 0.15, 0.3);
+  updateTransform();
+}
+
+function zoomReset() {
+  scale = 1;
+  translateX = 0;
+  translateY = 0;
+  updateTransform();
+}
+
+// 鼠标滚轮缩放
+const canvasContainer = document.getElementById('canvas-container');
+
+canvasContainer.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -0.08 : 0.08;
+  const newScale = Math.max(0.3, Math.min(3, scale + delta));
+
+  // 以鼠标位置为中心缩放
+  const rect = canvasContainer.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  // 调整位移以鼠标为中心
+  translateX = mouseX - (mouseX - translateX) * (newScale / scale);
+  translateY = mouseY - (mouseY - translateY) * (newScale / scale);
+
+  scale = newScale;
+  updateTransform();
+}, { passive: false });
+
+// 拖拽
+canvasContainer.addEventListener('mousedown', function(e) {
+  if (e.target.closest('.flow-node')) return; // 不拦截节点点击
+  isDragging = true;
+  dragStartX = e.clientX - translateX;
+  dragStartY = e.clientY - translateY;
+  canvasContainer.classList.add('dragging');
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!isDragging) return;
+  translateX = e.clientX - dragStartX;
+  translateY = e.clientY - dragStartY;
+  updateTransform();
+});
+
+document.addEventListener('mouseup', function() {
+  isDragging = false;
+  canvasContainer.classList.remove('dragging');
+});
+
+/* ====================================================================================
+ *  节点详情面板
+ * ==================================================================================== */
+
+// 当前详情面板节点索引
+let currentNodeIndex = -1;
+
+function showNodeDetail(nodeId) {
+  const flow = FLOWS[currentFlowIndex];
+  if (!flow) return;
+  const nodeIndex = flow.nodes.findIndex(n => n.id === nodeId);
+  if (nodeIndex < 0) return;
+  const node = flow.nodes[nodeIndex];
+  currentNodeIndex = nodeIndex;
+
+  const typeInfo = NODE_TYPES[node.type];
+  const panel = document.getElementById('detail-panel');
+  const overlay = document.getElementById('overlay');
+
+  document.getElementById('detail-title').textContent = node.name;
+
+  // 更新导航进度和按钮状态
+  document.getElementById('detail-progress').textContent = `${nodeIndex + 1} / ${flow.nodes.length}`;
+  document.getElementById('detail-prev-btn').disabled = (nodeIndex === 0);
+  document.getElementById('detail-next-btn').disabled = (nodeIndex === flow.nodes.length - 1);
+
+  let bodyHTML = '';
+
+  // 类型标记 + 位置信息
+  bodyHTML += `
+    <div class="detail-section">
+      <div class="detail-section-title">节点信息</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span class="detail-type-badge" style="background:${typeInfo.color}">${typeInfo.label}</span>
+        <span style="font-size:12px;color:var(--text-muted);">第 ${nodeIndex + 1} / ${flow.nodes.length} 步 · ${flow.title}</span>
+      </div>
+    </div>
+  `;
+
+  // Java类（可复制）
+  if (node.javaClass) {
+    bodyHTML += `
+      <div class="detail-section">
+        <div class="detail-section-title">对应 Java 类 / 方法（点击复制）</div>
+        <div class="detail-section-content">
+          <span class="detail-code copyable" onclick="copyText(this, '${node.javaClass.replace(/'/g, "\\'")}')">${node.javaClass}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // 功能描述
+  bodyHTML += `
+    <div class="detail-section">
+      <div class="detail-section-title">功能描述</div>
+      <div class="detail-section-content">${node.desc || '—'}</div>
+    </div>
+  `;
+
+  // 输入/输出
+  if (node.input || node.output) {
+    bodyHTML += `
+      <div class="detail-section">
+        <div class="detail-section-title">输入 / 输出</div>
+        <div class="detail-section-content detail-kv">
+          ${node.input ? `<div class="detail-kv-item"><span class="detail-kv-key">📥 输入</span><span class="detail-kv-val">${node.input}</span></div>` : ''}
+          ${node.output ? `<div class="detail-kv-item"><span class="detail-kv-key">📤 输出</span><span class="detail-kv-val">${node.output}</span></div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // 配置
+  if (node.config) {
+    bodyHTML += `
+      <div class="detail-section">
+        <div class="detail-section-title">关键配置参数</div>
+        <div class="detail-section-content"><span class="detail-code copyable" onclick="copyText(this, '${node.config.replace(/'/g, "\\'")}')">${node.config}</span></div>
+      </div>
+    `;
+  }
+
+  // 异常处理
+  if (node.error) {
+    bodyHTML += `
+      <div class="detail-section">
+        <div class="detail-section-title">异常处理</div>
+        <div class="detail-section-content" style="border-color:rgba(243,139,168,0.3);color:var(--accent-red);">${node.error}</div>
+      </div>
+    `;
+  }
+
+  const detail = node.detail || {};
+
+  if (Array.isArray(detail.eventSequence) && detail.eventSequence.length > 0) {
+    bodyHTML += `
+      <div class="detail-section">
+        <div class="detail-section-title">真实事件序列</div>
+        <div class="detail-section-content detail-kv">
+          ${detail.eventSequence.map((item, idx) => `
+            <div class="detail-kv-item" style="display:block;">
+              <div style="font-weight:600;margin-bottom:6px;color:var(--text-main);">${idx + 1}. ${item.title || '未命名事件'}</div>
+              ${item.method ? `<div style="margin-bottom:6px;"><span class="detail-kv-key">方法</span><span class="detail-kv-val"><span class="detail-code copyable" onclick="copyText(this, '${String(item.method).replace(/'/g, "\\'")}')">${item.method}</span></span></div>` : ''}
+              ${item.write ? `<div style="margin-bottom:6px;"><span class="detail-kv-key">写入</span><span class="detail-kv-val">${item.write}</span></div>` : ''}
+              ${item.note ? `<div><span class="detail-kv-key">说明</span><span class="detail-kv-val">${item.note}</span></div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (Array.isArray(detail.coveredMethods) && detail.coveredMethods.length > 0) {
+    bodyHTML += `
+      <div class="detail-section">
+        <div class="detail-section-title">实际覆盖方法</div>
+        <div class="detail-section-content" style="display:flex;flex-direction:column;gap:8px;">
+          ${detail.coveredMethods.map(method => `<span class="detail-code copyable" onclick="copyText(this, '${String(method).replace(/'/g, "\\'")}')">${method}</span>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (Array.isArray(detail.implementationNotes) && detail.implementationNotes.length > 0) {
+    bodyHTML += `
+      <div class="detail-section">
+        <div class="detail-section-title">实现口径说明</div>
+        <div class="detail-section-content detail-kv">
+          ${detail.implementationNotes.map(item => `
+            <div class="detail-kv-item">
+              <span class="detail-kv-key">${item.key || '说明'}</span>
+              <span class="detail-kv-val">${item.value || '—'}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('detail-body').innerHTML = bodyHTML;
+  panel.classList.add('open');
+  overlay.classList.add('open');
+
+  // 联动高亮
+  highlightNode(nodeIndex, true, true);
+}
+
+// 上一步/下一步
+function navigateNode(delta) {
+  const flow = FLOWS[currentFlowIndex];
+  if (!flow) return;
+  const next = currentNodeIndex + delta;
+  if (next < 0 || next >= flow.nodes.length) return;
+  showNodeDetail(flow.nodes[next].id);
+}
+
+// 文本复制
+function copyText(el, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    el.classList.add('copied');
+    setTimeout(() => el.classList.remove('copied'), 1500);
+  }).catch(() => {
+    // 降级
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    el.classList.add('copied');
+    setTimeout(() => el.classList.remove('copied'), 1500);
+  });
+}
+
+function closeDetailPanel() {
+  document.getElementById('detail-panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  // 清除高亮
+  clearHighlight();
+  currentNodeIndex = -1;
+}
+
+/* ====================================================================================
+ *  节点高亮联动
+ * ==================================================================================== */
+function highlightNode(idx, on, persist = false) {
+  const svg = document.getElementById('canvas-svg');
+  const nodes = svg.querySelectorAll('.flow-node');
+  const edges = svg.querySelectorAll('.edge-path');
+
+  if (!on && !persist) {
+    clearHighlight();
+    return;
+  }
+
+  // 找出与当前节点相关的连线
+  const relatedEdgeIdx = new Set();
+  const relatedNodeIdx = new Set([idx]);
+  edges.forEach(edge => {
+    const from = parseInt(edge.getAttribute('data-from'));
+    const to = parseInt(edge.getAttribute('data-to'));
+    if (from === idx || to === idx) {
+      relatedEdgeIdx.add(edge);
+      relatedNodeIdx.add(from);
+      relatedNodeIdx.add(to);
+    }
+  });
+
+  nodes.forEach(n => {
+    const nIdx = parseInt(n.getAttribute('data-idx'));
+    n.classList.remove('dimmed', 'highlighted');
+    if (relatedNodeIdx.has(nIdx)) {
+      if (nIdx === idx) n.classList.add('highlighted');
+    } else {
+      n.classList.add('dimmed');
+    }
+  });
+  edges.forEach(e => {
+    e.classList.remove('dimmed', 'highlighted');
+    if (relatedEdgeIdx.has(e)) e.classList.add('highlighted');
+    else e.classList.add('dimmed');
+  });
+}
+
+function clearHighlight() {
+  const svg = document.getElementById('canvas-svg');
+  svg.querySelectorAll('.flow-node').forEach(n => n.classList.remove('dimmed', 'highlighted'));
+  svg.querySelectorAll('.edge-path').forEach(e => e.classList.remove('dimmed', 'highlighted'));
+}
+
+/* ====================================================================================
+ *  搜索功能
+ * ==================================================================================== */
+function initSearch() {
+  const input = document.getElementById('search-input');
+  const results = document.getElementById('search-results');
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { results.classList.remove('open'); return; }
+
+    const matches = [];
+    FLOWS.forEach((flow, fi) => {
+      flow.nodes.forEach((node, ni) => {
+        const hay = (node.name + ' ' + (node.javaClass || '') + ' ' + (node.desc || '')).toLowerCase();
+        if (hay.includes(q)) {
+          matches.push({ flow, flowIdx: fi, node, nodeIdx: ni });
+        }
+      });
+    });
+
+    if (matches.length === 0) {
+      results.innerHTML = '<div class="search-result-empty">未找到匹配节点</div>';
+    } else {
+      results.innerHTML = matches.slice(0, 20).map(m => `
+        <div class="search-result-item" onclick="jumpToNode(${m.flowIdx}, '${m.node.id}')">
+          <div class="search-result-name">${m.node.name}</div>
+          <div class="search-result-meta">${m.flow.icon} ${m.flow.title} · ${m.node.javaClass || NODE_TYPES[m.node.type].label}</div>
+        </div>
+      `).join('');
+    }
+    results.classList.add('open');
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => results.classList.remove('open'), 200);
+  });
+  input.addEventListener('focus', () => {
+    if (input.value.trim()) results.classList.add('open');
+  });
+}
+
+function jumpToNode(flowIdx, nodeId) {
+  if (flowIdx !== currentFlowIndex) {
+    selectFlow(flowIdx);
+    setTimeout(() => showNodeDetail(nodeId), 300);
+  } else {
+    showNodeDetail(nodeId);
+  }
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').classList.remove('open');
+}
+
+/* ====================================================================================
+ *  主题切换 / 全屏 / 导出 / 移动端
+ * ==================================================================================== */
+function toggleTheme() {
+  document.body.classList.toggle('theme-light');
+  const isLight = document.body.classList.contains('theme-light');
+  document.getElementById('theme-btn').textContent = isLight ? '☀️' : '🌙';
+  try { localStorage.setItem('ragent-flow-theme', isLight ? 'light' : 'dark'); } catch (e) {}
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+function exportSVG() {
+  try {
+    const flow = FLOWS[currentFlowIndex];
+    const svg = document.getElementById('canvas-svg');
+    if (!svg) { alert('未找到流程图 SVG'); return; }
+
+    // 克隆并剥离交互属性
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    // 清除所有 onclick / onmouseenter / onmouseleave / class=dimmed/highlighted
+    clone.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
+    clone.querySelectorAll('[onmouseenter]').forEach(el => el.removeAttribute('onmouseenter'));
+    clone.querySelectorAll('[onmouseleave]').forEach(el => el.removeAttribute('onmouseleave'));
+    clone.querySelectorAll('.dimmed,.highlighted').forEach(el => {
+      el.classList.remove('dimmed', 'highlighted');
+    });
+
+    // 当前主题下 CSS 变量的真实颜色
+    const isLight = document.body.classList.contains('theme-light');
+    const cssVarMap = {
+      '--text-primary':   isLight ? '#1d1d1f' : '#cdd6f4',
+      '--text-secondary': isLight ? '#3a3a3c' : '#a6adc8',
+      '--text-muted':     isLight ? '#8e8e93' : '#6c7086',
+      '--bg-primary':     isLight ? '#ffffff' : '#1e1e2e',
+      '--bg-secondary':   isLight ? '#f5f5f7' : '#181825',
+      '--bg-tertiary':    isLight ? '#e5e5ea' : '#313244',
+      '--border-color':   isLight ? '#d1d1d6' : '#45475a',
+      '--accent-blue':    '#89b4fa',
+      '--accent-green':   '#a6e3a1',
+      '--accent-orange':  '#fab387',
+      '--accent-purple':  '#cba6f7',
+      '--accent-red':     '#f38ba8',
+      '--accent-gray':    '#9399b2',
+      '--accent-teal':    '#94e2d5'
+    };
+
+    // 在克隆的 SVG 根部插入背景矩形
+    const w = parseFloat(svg.getAttribute('width')) || 800;
+    const h = parseFloat(svg.getAttribute('height')) || 600;
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('x', '0');
+    bgRect.setAttribute('y', '0');
+    bgRect.setAttribute('width', w);
+    bgRect.setAttribute('height', h);
+    bgRect.setAttribute('fill', cssVarMap['--bg-primary']);
+    clone.insertBefore(bgRect, clone.firstChild);
+
+    // 序列化后替换所有 var(--xxx)
+    let svgStr = new XMLSerializer().serializeToString(clone);
+    Object.entries(cssVarMap).forEach(([k, v]) => {
+      const re = new RegExp('var\\(\\' + '-' + '-' + k.substring(2).replace(/-/g, '\\-') + '\\)', 'g');
+      svgStr = svgStr.replace(re, v);
+    });
+    // 兜底：再处理可能残留的 var(...)
+    svgStr = svgStr.replace(/var\([^)]+\)/g, cssVarMap['--text-primary']);
+
+    // 确保带 XML 声明
+    if (!svgStr.startsWith('<?xml')) {
+      svgStr = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + svgStr;
+    }
+
+    // 触发下载
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ragent-flow-${flow.id}-${Date.now()}.svg`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch (err) {
+    console.error('[exportSVG] 导出失败', err);
+    alert('导出失败：' + (err && err.message ? err.message : err));
+  }
+}
+
+function toggleMobileSidebar() {
+  document.querySelector('.sidebar').classList.toggle('mobile-open');
+}
+
+/* ====================================================================================
+ *  键盘快捷键
+ * ==================================================================================== */
+document.addEventListener('keydown', function(e) {
+  // 输入框聚焦时不触发
+  const isTyping = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+
+  if (e.key === 'Escape') {
+    closeDetailPanel();
+    document.getElementById('search-results').classList.remove('open');
+    document.getElementById('search-input').blur();
+    return;
+  }
+
+  if (isTyping) return;
+
+  if (e.key === '/') {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+  } else if (e.key === 'ArrowLeft' && !document.getElementById('detail-panel').classList.contains('open')) {
+    if (currentFlowIndex > 0) selectFlow(currentFlowIndex - 1);
+  } else if (e.key === 'ArrowRight' && !document.getElementById('detail-panel').classList.contains('open')) {
+    if (currentFlowIndex < FLOWS.length - 1) selectFlow(currentFlowIndex + 1);
+  } else if (e.key === 'ArrowLeft' && document.getElementById('detail-panel').classList.contains('open')) {
+    navigateNode(-1);
+  } else if (e.key === 'ArrowRight' && document.getElementById('detail-panel').classList.contains('open')) {
+    navigateNode(1);
+  }
+});
+
+/* ====================================================================================
+ *  初始化
+ * ==================================================================================== */
+function init() {
+  // 恢复主题
+  try {
+    if (localStorage.getItem('ragent-flow-theme') === 'light') {
+      document.body.classList.add('theme-light');
+      document.getElementById('theme-btn').textContent = '☀️';
+    }
+  } catch (e) {}
+
+  updateGlobalStats();
+  renderNav();
+  renderFlowHeader();
+  renderFlowDiagram();
+  renderDecisions();
+  initSearch();
+  // 首次渲染后居中
+  setTimeout(fitCanvasToView, 50);
+
+  // 窗口大小变化时重新居中
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(fitCanvasToView, 200);
+  });
+}
+
+init();
+
+</script>
+</body>
+</html>
